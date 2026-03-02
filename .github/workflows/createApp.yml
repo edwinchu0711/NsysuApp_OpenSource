@@ -3,6 +3,10 @@ name: NSYSU-Build-and-Release
 on:
   workflow_dispatch:
 
+  # 加上這段權限設定
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build & Release NSYSU
