@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "884980113630",
+    "project_id": "nsysu-app-dc690",
+    "storage_bucket": "nsysu-app-dc690.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884980113630:android:e10fb437e2c62e3097e24f",
+        "android_client_info": {
+          "package_name": "com.example.test_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3IphKyZ1T0wxQrW1rPseOpXOn5D4qix0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884980113630:android:98baa93ca0694b4397e24f",
+        "android_client_info": {
+          "package_name": "com.nsysutest.application"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3IphKyZ1T0wxQrW1rPseOpXOn5D4qix0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
