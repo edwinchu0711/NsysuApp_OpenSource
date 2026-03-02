@@ -28,34 +28,35 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  permission_handler: ^11.3.0 # 處理安裝未知來源權限 (Android 8+)
-  path_provider: ^2.1.1  # 用於存取暫存資料夾
-  package_info_plus: ^8.0.0  # 加入這一行
-  open_filex: ^4.3.0      # 用於呼叫手機的其他 App 開啟檔案
+  permission_handler: ^11.3.0
+  path_provider: ^2.1.1
+  package_info_plus: ^8.0.0
+  open_filex: ^4.3.0
   connectivity_plus: ^5.0.0
   uuid: ^4.3.3
-  table_calendar: ^3.2.0  # 強大的日曆 UI
-  collection: ^1.18.0     # 方便的集合處理方法
+  table_calendar: ^3.2.0
+  collection: ^1.18.0
   crypto: ^3.0.3
   convert: ^3.1.1
-  timezone: ^0.9.2                      # 處理時區與時間排程
+  timezone: ^0.9.2
   flutter:
     sdk: flutter
-  flutter_localizations: # ★ 確保有加入這行
+  flutter_localizations:
     sdk: flutter
   tflite_flutter: ^0.12.1
   flutter_inappwebview: ^6.0.0
   image: ^4.7.2
-  shared_preferences: ^2.2.2  # 新增這個
-  http: ^1.2.0    # 用來發送 requests
-  html: ^0.15.4   # 用來解析網頁 (類似 BeautifulSoup)
+  shared_preferences: ^2.2.2
+  http: ^1.2.0
+  html: ^0.15.4
   cupertino_icons: ^1.0.8
   dio: ^5.9.0
-  intl: ^0.20.0 
-  url_launcher: ^6.2.4  # 新增這個
+  intl: ^0.20.0
+  url_launcher: ^6.2.4
   dio_cookie_manager: ^3.3.0
-  firebase_messaging: ^15.2.1
-  flutter_local_notifications: ^18.0.1
+  # ✅ firebase_messaging 已移除
+  # ✅ flutter_local_notifications 已移除（若不需本地通知）
+
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
