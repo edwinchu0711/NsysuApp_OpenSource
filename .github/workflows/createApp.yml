@@ -1,0 +1,65 @@
+name: NSYSU-Auto-Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Release NSYSU
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # 1. 設置 Java 環境
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # 2. 設置 Flutter
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          architecture: x64
+          
+      - run: flutter pub get
+
+      # 3. 💡 自動抓取版本號 (從 pubspec.yaml 提取)
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep '^version: ' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+
+      # 4. Android 建置
+      - name: Build Android APK
+        run: flutter build apk --release
+      
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/NSYSU.apk
+
+      # 5. iOS 建置
+      - name: Update Pods
+        run: pod repo update
+        working-directory: ios
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA
+        run: |
+          mkdir Payload
+          mv Runner.app Payload/
+          zip -qq -r -9 NSYSU.ipa Payload
+        working-directory: build/ios/iphoneos
+
+      # 6. 自動上傳至 Release (使用剛剛抓到的版本號)
+      - name: Upload to Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: "{build/ios/iphoneos/NSYSU.ipa,build/app/outputs/flutter-apk/NSYSU.apk}"
+          file_glob: true
+          tag: ${{ steps.get_version.outputs.VERSION }}
+          overwrite: true
+          body: "NSYSU 自動建置產物 - ${{ steps.get_version.outputs.VERSION }} (${{ github.event.head_commit.message }})"
