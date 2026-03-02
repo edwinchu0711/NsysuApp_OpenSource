@@ -22,6 +22,15 @@
 
 ---
 
+## 安裝與下載 (Installation)
+
+本程式未於應用程式商店（App Store / Google Play）上架，如欲使用請至 **[Releases 頁面](../../releases)** 下載對應檔案：
+
+* **Android**：請下載 `.apk` 檔案，下載後即可直接安裝使用。
+* **iOS**：請下載 `.ipa` 檔案。由於未上架商店，使用者須透過 **Sideload (側載自簽)** 方式進行安裝（例如使用 AltStore 或 SideStore 等工具）。
+
+---
+
 ## ⚠️ 免責聲明 (Disclaimer)
 
 1. 本程式為非官方開發工具，與國立中山大學校方無直接關聯。
