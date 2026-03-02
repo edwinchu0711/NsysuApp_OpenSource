@@ -23,7 +23,7 @@ class AppVersionPage extends StatelessWidget {
     VersionRecord(
       version: "v5.0.0",
       date: "2026-03-02",
-      description: "移除登入紀錄、新增異常處理功能、移除更新功能（這是最後一版了，我要去忙其他事情了，謝謝大家一路上的支持😇）",
+      description: "移除登入紀錄、移除通知功能、新增異常處理功能、移除更新功能（這是最後一版了，我要去忙其他事情了，謝謝大家一路上的支持😇）",
     ),
     VersionRecord(
       version: "v4.3.0",
