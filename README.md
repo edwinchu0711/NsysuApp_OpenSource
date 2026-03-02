@@ -1,4 +1,4 @@
-# NSYSU Mobile 
+# NSYSU
 
 ##  功能說明 (Features)
 
