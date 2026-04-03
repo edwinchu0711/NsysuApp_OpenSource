@@ -28,6 +28,7 @@
 
 * **Android**：請下載 `.apk` 檔案，下載後即可直接安裝使用。
 * **iOS**：請下載 `.ipa` 檔案。由於未上架商店，使用者須透過 **Sideload (側載自簽)** 方式進行安裝（例如使用 AltStore 或 SideStore 等工具）。
+* **Windows**：請至 **[NsysuWindows_OpenSource](https://github.com/edwinchu0711/NsysuWindows_OpenSource)** 專案頁面下載安裝程式。
 
 ---
 
