@@ -5,29 +5,66 @@ import 'package:open_filex/open_filex.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import '../../services/exam_task/elearn_task_HW_service.dart';
+import '../../theme/app_theme.dart';
 
 // --- Helper Functions (保持不變) ---
-Widget _buildInfoRow(String label, String value) {
+Widget _buildInfoRow(BuildContext context, String label, String value) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final isDark = colorScheme.isDark;
+
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(width: 90, child: Text(label, style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold))),
-        Expanded(child: Text(value, style: const TextStyle(color: Colors.black87, height: 1.3))),
+        SizedBox(
+          width: 90, 
+          child: Text(
+            label, 
+            style: TextStyle(
+              color: isDark ? colorScheme.subtitleText : Colors.grey[600], 
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value, 
+            style: TextStyle(
+              color: isDark ? colorScheme.primaryText : Colors.black87, 
+              height: 1.3,
+            ),
+          ),
+        ),
       ],
     ),
   );
 }
 
-Widget _buildSectionTitle(String title) {
+Widget _buildSectionTitle(BuildContext context, String title) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final isDark = colorScheme.isDark;
+  final primaryColor = isDark ? colorScheme.secondary : Colors.indigo;
+
   return Padding(
     padding: const EdgeInsets.fromLTRB(0, 24, 0, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
-        Container(margin: const EdgeInsets.only(top: 4), width: 40, height: 3, color: Colors.indigo.withOpacity(0.3)),
+        Text(
+          title, 
+          style: TextStyle(
+            fontSize: 18, 
+            fontWeight: FontWeight.bold, 
+            color: primaryColor,
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.only(top: 4), 
+          width: 40, 
+          height: 3, 
+          color: primaryColor.withOpacity(0.3),
+        ),
       ],
     ),
   );
@@ -40,7 +77,13 @@ String _fmtDate(String? iso) {
   } catch (e) { return iso; }
 }
 
-Widget _cleanHtml(String htmlString) {
+Widget _cleanHtml(BuildContext context, String htmlString) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final isDark = colorScheme.isDark;
+
+  final themeFontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
+  final themeFontFamilyFallback = Theme.of(context).textTheme.bodyMedium?.fontFamilyFallback;
+
   var document = html_parser.parse(htmlString);
   List<InlineSpan> spans = [];
 
@@ -59,7 +102,14 @@ Widget _cleanHtml(String htmlString) {
       for (var child in element.nodes) {
         if (['b', 'strong'].contains(element.localName)) {
            if (child.nodeType == dom.Node.TEXT_NODE) {
-              spans.add(TextSpan(text: child.text, style: const TextStyle(fontWeight: FontWeight.bold)));
+              spans.add(TextSpan(
+                text: child.text, 
+                style: TextStyle(
+                  fontFamily: themeFontFamily,
+                  fontFamilyFallback: themeFontFamilyFallback,
+                  fontWeight: FontWeight.bold,
+                ),
+              ));
            } else {
               _parseNode(child); 
            }
@@ -73,9 +123,15 @@ Widget _cleanHtml(String htmlString) {
     }
   }
   _parseNode(document.body!);
-  return RichText(
-    text: TextSpan(
-      style: const TextStyle(color: Colors.black87, fontSize: 15, height: 1.5),
+  return Text.rich(
+    TextSpan(
+      style: TextStyle(
+        fontFamily: themeFontFamily,
+        fontFamilyFallback: themeFontFamilyFallback,
+        color: isDark ? colorScheme.bodyText : Colors.black87, 
+        fontSize: 15, 
+        height: 1.5,
+      ),
       children: spans,
     ),
   );
@@ -89,6 +145,8 @@ class ExamDetailPage extends StatefulWidget {
   final String title;
   final bool isIgnored;
   final bool isSubmitted; // 新增：是否已完成
+  final VoidCallback? onStatusChanged;
+  final bool showAppBar;
 
   const ExamDetailPage({
     Key? key, 
@@ -96,6 +154,8 @@ class ExamDetailPage extends StatefulWidget {
     required this.title, 
     this.isIgnored = false,
     required this.isSubmitted, 
+    this.onStatusChanged,
+    this.showAppBar = true,
   }) : super(key: key);
 
   @override
@@ -107,6 +167,16 @@ class _ExamDetailPageState extends State<ExamDetailPage> {
   Map<String, dynamic>? _data;
   String _error = "";
   late bool _currentIgnored;
+
+  @override
+  void didUpdateWidget(covariant ExamDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isIgnored != oldWidget.isIgnored) {
+      setState(() {
+        _currentIgnored = widget.isIgnored;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -140,6 +210,7 @@ class _ExamDetailPageState extends State<ExamDetailPage> {
               Navigator.pop(ctx);
               await ElearnService.instance.toggleIgnoreTask(widget.examId, !_currentIgnored);
               setState(() => _currentIgnored = !_currentIgnored);
+              widget.onStatusChanged?.call();
             },
           ),
         ],
@@ -149,36 +220,42 @@ class _ExamDetailPageState extends State<ExamDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+
     return WillPopScope(
       onWillPop: () async {
+        if (widget.onStatusChanged != null) {
+          return true;
+        }
         Navigator.pop(context, _currentIgnored != widget.isIgnored);
         return false;
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text("測驗詳情"), 
-          backgroundColor: Colors.indigo, 
-          foregroundColor: Colors.white,
-          actions: [
-            // 只有「未完成」的任務才能切換忽略狀態
-            if (!widget.isSubmitted)
-              IconButton(
-                icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
-                tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
-                onPressed: _toggleIgnore,
+        appBar: widget.showAppBar
+            ? AppBar(
+                title: const Text("測驗詳情"), 
+                actions: [
+                  // 只有「未完成」的任務才能切換忽略狀態
+                  if (!widget.isSubmitted)
+                    IconButton(
+                      icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
+                      tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
+                      onPressed: _toggleIgnore,
+                    )
+                ],
               )
-          ],
-        ),
+            : null,
         body: _loading 
           ? const Center(child: CircularProgressIndicator()) 
           : _error.isNotEmpty 
-            ? Center(child: Text(_error)) 
-            : _buildContent(),
+            ? Center(child: Text(_error, style: TextStyle(color: isDark ? colorScheme.primaryText : null))) 
+            : _buildContent(context, isDark, colorScheme),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(BuildContext context, bool isDark, ColorScheme colorScheme) {
     final info = _data!['info'];
     final subs = _data!['submissions']['submissions'] as List;
     final endTime = DateTime.parse(info['end_time']);
@@ -194,11 +271,38 @@ class _ExamDetailPageState extends State<ExamDetailPage> {
               width: double.infinity,
               padding: const EdgeInsets.all(8),
               margin: const EdgeInsets.only(bottom: 10),
-              color: Colors.blue[50],
-              child: const Text("此活動已被標記為忽略", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue[50],
+              child: Text(
+                "此活動已被標記為忽略", 
+                style: TextStyle(
+                  color: isDark ? Colors.blue.shade300 : Colors.blue, 
+                  fontWeight: FontWeight.bold,
+                ), 
+                textAlign: TextAlign.center,
+              ),
             ),
             
-          Text(widget.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title, 
+                  style: TextStyle(
+                    fontSize: 24, 
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? colorScheme.primaryText : Colors.black87,
+                  ),
+                ),
+              ),
+              if (!widget.showAppBar && !widget.isSubmitted)
+                IconButton(
+                  icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
+                  tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
+                  onPressed: _toggleIgnore,
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -210,43 +314,75 @@ class _ExamDetailPageState extends State<ExamDetailPage> {
             child: Text(isClosed ? "測驗已截止" : "測驗進行中", style: TextStyle(color: isClosed ? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
           ),
           
-          _buildSectionTitle("基本資訊"),
+          _buildSectionTitle(context, "基本資訊"),
           Card(
             elevation: 0,
-            color: Colors.grey[50],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey[300]!)),
+            color: isDark ? colorScheme.secondaryCardBackground : Colors.grey[50],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10), 
+              side: BorderSide(color: isDark ? colorScheme.borderColor : Colors.grey[300]!),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildInfoRow("活動時間", "${_fmtDate(info['start_time'])} - ${_fmtDate(info['end_time'])}"),
-                  _buildInfoRow("公布成績", _fmtDate(info['announce_score_time'])),
-                  _buildInfoRow("公布答案", _fmtDate(info['announce_answer_time'])),
-                  _buildInfoRow("成績比率", "${info['score_percentage']}%"),
-                  _buildInfoRow("次數上限", "${info['submit_times']}"),
-                  _buildInfoRow("測驗形式", info['type'] == 'exam' ? '個人測驗' : '團體測驗'),
-                  _buildInfoRow("計分規則", info['score_rule'] == 'highest' ? '最高得分' : '平均得分'),
-                  _buildInfoRow("完成指標", info['completion_criterion']),
+                  _buildInfoRow(context, "活動時間", "${_fmtDate(info['start_time'])} - ${_fmtDate(info['end_time'])}"),
+                  _buildInfoRow(context, "公布成績", _fmtDate(info['announce_score_time'])),
+                  _buildInfoRow(context, "公布答案", _fmtDate(info['announce_answer_time'])),
+                  _buildInfoRow(context, "成績比率", "${info['score_percentage']}%"),
+                  _buildInfoRow(context, "次數上限", "${info['submit_times']}"),
+                  _buildInfoRow(context, "測驗形式", info['type'] == 'exam' ? '個人測驗' : '團體測驗'),
+                  _buildInfoRow(context, "計分規則", info['score_rule'] == 'highest' ? '最高得分' : '平均得分'),
+                  _buildInfoRow(context, "完成指標", info['completion_criterion']),
                 ],
               ),
             ),
           ),
 
-          _buildSectionTitle("繳交紀錄"),
+          _buildSectionTitle(context, "繳交紀錄"),
           Card(
             elevation: 2,
             child: SizedBox(
               width: double.infinity,
               child: DataTable(
-                headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
-                columns: const [
-                  DataColumn(label: Text('最後交卷時間', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('成績', style: TextStyle(fontWeight: FontWeight.bold))),
+                headingRowColor: MaterialStateProperty.all(isDark ? colorScheme.secondaryCardBackground : Colors.grey[200]),
+                columns: [
+                  DataColumn(
+                    label: Text(
+                      '最後交卷時間', 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? colorScheme.primaryText : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      '成績', 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? colorScheme.primaryText : Colors.black87,
+                      ),
+                    ),
+                  ),
                 ],
                 rows: subs.map<DataRow>((s) {
                   return DataRow(cells: [
-                    DataCell(Text(_fmtDate(s['submitted_at']))),
-                    DataCell(Text(s['score']?.toString() ?? "-", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo))),
+                    DataCell(
+                      Text(
+                        _fmtDate(s['submitted_at']),
+                        style: TextStyle(color: isDark ? colorScheme.bodyText : Colors.black87),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        s['score']?.toString() ?? "-", 
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold, 
+                          color: isDark ? colorScheme.secondary : Colors.indigo,
+                        ),
+                      ),
+                    ),
                   ]);
                 }).toList(),
               ),
@@ -266,6 +402,8 @@ class HomeworkDetailPage extends StatefulWidget {
   final String title;
   final bool isIgnored;
   final bool isSubmitted; // 新增
+  final VoidCallback? onStatusChanged;
+  final bool showAppBar;
 
   const HomeworkDetailPage({
     Key? key, 
@@ -273,6 +411,8 @@ class HomeworkDetailPage extends StatefulWidget {
     required this.title, 
     this.isIgnored = false,
     required this.isSubmitted,
+    this.onStatusChanged,
+    this.showAppBar = true,
   }) : super(key: key);
 
   @override
@@ -285,6 +425,16 @@ class _HomeworkDetailPageState extends State<HomeworkDetailPage> {
   String _error = "";
   bool _downloading = false;
   late bool _currentIgnored;
+
+  @override
+  void didUpdateWidget(covariant HomeworkDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isIgnored != oldWidget.isIgnored) {
+      setState(() {
+        _currentIgnored = widget.isIgnored;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -318,6 +468,7 @@ class _HomeworkDetailPageState extends State<HomeworkDetailPage> {
               Navigator.pop(ctx);
               await ElearnService.instance.toggleIgnoreTask(widget.homeworkId, !_currentIgnored);
               setState(() => _currentIgnored = !_currentIgnored);
+              widget.onStatusChanged?.call();
             },
           ),
         ],
@@ -345,36 +496,42 @@ class _HomeworkDetailPageState extends State<HomeworkDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+
     return WillPopScope(
       onWillPop: () async {
+        if (widget.onStatusChanged != null) {
+          return true;
+        }
         Navigator.pop(context, _currentIgnored != widget.isIgnored);
         return false;
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text("作業詳情"), 
-          backgroundColor: Colors.indigo, 
-          foregroundColor: Colors.white,
-          actions: [
-            // 只有「未完成」的任務才能切換忽略狀態
-            if (!widget.isSubmitted)
-              IconButton(
-                icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
-                tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
-                onPressed: _toggleIgnore,
+        appBar: widget.showAppBar
+            ? AppBar(
+                title: const Text("作業詳情"), 
+                actions: [
+                  // 只有「未完成」的任務才能切換忽略狀態
+                  if (!widget.isSubmitted)
+                    IconButton(
+                      icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
+                      tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
+                      onPressed: _toggleIgnore,
+                    )
+                ],
               )
-          ],
-        ),
+            : null,
         body: _loading 
           ? const Center(child: CircularProgressIndicator()) 
           : _error.isNotEmpty 
-            ? Center(child: Text(_error)) 
-            : _buildContent(),
+            ? Center(child: Text(_error, style: TextStyle(color: isDark ? colorScheme.primaryText : null))) 
+            : _buildContent(context, isDark, colorScheme),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(BuildContext context, bool isDark, ColorScheme colorScheme) {
     final d = _data!['data'];
     final info = _data!;
     
@@ -393,58 +550,103 @@ class _HomeworkDetailPageState extends State<HomeworkDetailPage> {
               width: double.infinity,
               padding: const EdgeInsets.all(8),
               margin: const EdgeInsets.only(bottom: 10),
-              color: Colors.blue[50],
-              child: const Text("此活動已被標記為忽略", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue[50],
+              child: Text(
+                "此活動已被標記為忽略", 
+                style: TextStyle(
+                  color: isDark ? Colors.blue.shade300 : Colors.blue, 
+                  fontWeight: FontWeight.bold,
+                ), 
+                textAlign: TextAlign.center,
+              ),
             ),
 
-          Text(widget.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title, 
+                  style: TextStyle(
+                    fontSize: 24, 
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? colorScheme.primaryText : Colors.black87,
+                  ),
+                ),
+              ),
+              if (!widget.showAppBar && !widget.isSubmitted)
+                IconButton(
+                  icon: Icon(_currentIgnored ? Icons.visibility : Icons.visibility_off),
+                  tooltip: _currentIgnored ? "取消忽略" : "忽略活動",
+                  onPressed: _toggleIgnore,
+                ),
+            ],
+          ),
           const SizedBox(height: 16),
           
-          _buildSectionTitle("基本資訊"),
+          _buildSectionTitle(context, "基本資訊"),
           Card(
             elevation: 0,
-            color: Colors.grey[50],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey[300]!)),
+            color: isDark ? colorScheme.secondaryCardBackground : Colors.grey[50],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10), 
+              side: BorderSide(color: isDark ? colorScheme.borderColor : Colors.grey[300]!),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildInfoRow("活動時間", "${_fmtDate(startTime)} - ${_fmtDate(endTime)}"),
-                  _buildInfoRow("公布成績", d['announce_score_type'] == 2 ? "馬上公布" : "依設定"),
-                  _buildInfoRow("成績比率", "${d['score_percentage']}%"),
-                  _buildInfoRow("作業形式", d['homework_type'] == 'file_upload' ? '個人作業(上傳)' : '一般作業'),
-                  _buildInfoRow("計分規則", d['score_rule'] == 'highest' ? '最高得分' : '平均得分'),
-                  _buildInfoRow("完成指標", info['completion_criterion']),
+                  _buildInfoRow(context, "活動時間", "${_fmtDate(startTime)} - ${_fmtDate(endTime)}"),
+                  _buildInfoRow(context, "公布成績", d['announce_score_type'] == 2 ? "馬上公布" : "依設定"),
+                  _buildInfoRow(context, "成績比率", "${d['score_percentage']}%"),
+                  _buildInfoRow(context, "作業形式", d['homework_type'] == 'file_upload' ? '個人作業(上傳)' : '一般作業'),
+                  _buildInfoRow(context, "計分規則", d['score_rule'] == 'highest' ? '最高得分' : '平均得分'),
+                  _buildInfoRow(context, "完成指標", info['completion_criterion']),
+                  if (info['score'] != null)
+                    _buildInfoRow(
+                      context,
+                      "得分",
+                      info['score'].toString().replaceAll(RegExp(r'\.0$'), ''),
+                    ),
                 ],
               ),
             ),
           ),
 
           if (desc.isNotEmpty) ...[
-            _buildSectionTitle("作業說明"),
+            _buildSectionTitle(context, "作業說明"),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? colorScheme.cardBackground : Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: isDark ? colorScheme.borderColor : Colors.grey[300]!),
               ),
-              child: _cleanHtml(desc),
+              child: _cleanHtml(context, desc),
             ),
           ],
 
           if (uploads.isNotEmpty) ...[
-            _buildSectionTitle("附件下載"),
+            _buildSectionTitle(context, "附件下載"),
             ...uploads.map((u) {
               return Card(
                 elevation: 2,
                 margin: const EdgeInsets.only(bottom: 10),
                 child: ListTile(
-                  leading: const Icon(Icons.attach_file, color: Colors.indigo),
-                  title: Text(u['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(u['type'] ?? "file"),
-                  trailing: const Icon(Icons.download_rounded),
+                  leading: Icon(Icons.attach_file, color: isDark ? colorScheme.secondary : Colors.indigo),
+                  title: Text(
+                    u['name'], 
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? colorScheme.primaryText : Colors.black87,
+                    ),
+                  ),
+                  subtitle: Text(
+                    u['type'] ?? "file",
+                    style: TextStyle(color: isDark ? colorScheme.subtitleText : Colors.black54),
+                  ),
+                  trailing: Icon(Icons.download_rounded, color: isDark ? colorScheme.iconColor : null),
                   onTap: () => _downloadAndOpen(u['reference_id'], u['name']),
                 ),
               );

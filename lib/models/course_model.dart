@@ -8,6 +8,7 @@ class Course {
   final String required;
   final String detailUrl;
   final List<CourseTime> parsedTimes;
+  final String? semester; // 新增：學期欄位
 
   Course({
     required this.name,
@@ -19,6 +20,7 @@ class Course {
     required this.required,
     required this.detailUrl,
     required this.parsedTimes,
+    this.semester,
   });
 
   // --- 關鍵修改：將 Map 轉換為 Course 物件 ---
@@ -35,6 +37,7 @@ class Course {
       parsedTimes: (json['parsedTimes'] as List)
           .map((t) => CourseTime.fromJson(t))
           .toList(),
+      semester: json['semester'],
     );
   }
 
@@ -50,6 +53,7 @@ class Course {
       'required': required,
       'detailUrl': detailUrl,
       'parsedTimes': parsedTimes.map((t) => t.toJson()).toList(),
+      'semester': semester,
     };
   }
 }

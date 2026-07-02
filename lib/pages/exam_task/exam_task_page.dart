@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 需引入
 import '../../services/exam_task/elearn_task_HW_service.dart';
 import 'task_detail_pages.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/glass_dropdown.dart';
 
 class ExamTaskPage extends StatefulWidget {
   const ExamTaskPage({Key? key}) : super(key: key);
@@ -16,13 +18,26 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
   List<ElearnTask> _displayedTasks = [];
   bool _isLoading = true;
   String _statusMessage = "";
+  ElearnTask? _selectedTask;
 
   // 篩選條件
-  String _selectedSemester = ""; 
-  String _selectedCourse = "所有課程"; 
+  String _selectedSemester = "";
+  String _selectedCourse = "所有課程";
   List<String> _semesterOptions = [];
   List<String> _courseOptions = ["所有課程"];
   final Set<String> _selectedStatusFilters = {};
+
+  void _syncSelectedTask() {
+    if (_selectedTask != null) {
+      final updated = _allTasks.firstWhere(
+        (t) => t.id == _selectedTask!.id && t.type == _selectedTask!.type,
+        orElse: () => _selectedTask!,
+      );
+      setState(() {
+        _selectedTask = updated;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -44,6 +59,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
           _allTasks = cached;
           _updateCourseOptions();
           _applyFilterAndSort();
+          _syncSelectedTask();
           // 先別急著關掉 loading，等下決定要不要聯網
         });
       }
@@ -57,10 +73,10 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     if (lastTs != null && cached.isNotEmpty) {
       final DateTime lastTime = DateTime.fromMillisecondsSinceEpoch(lastTs);
       final int diff = DateTime.now().difference(lastTime).inMinutes;
-      
+
       if (diff < 3) {
         shouldRefresh = false;
-        print("⏳ 距離上次更新僅 $diff 分鐘，跳過自動刷新，使用快取資料。");
+        // debugPrint("⏳ 距離上次更新僅 $diff 分鐘，跳過自動刷新，使用快取資料。");
         if (mounted) {
           setState(() {
             _isLoading = false; // 停止轉圈
@@ -83,7 +99,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     int month = now.month;
 
     int startYear;
-    int semesterType; 
+    int semesterType;
 
     if (month >= 9 || month <= 1) {
       startYear = (month >= 9) ? currentYear : (currentYear - 1);
@@ -103,43 +119,52 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
         semesterType = 1;
       }
     }
-    
+
     if (!options.contains("114-1")) {
-       options.insert(0, "114-1");
-       if (_selectedSemester.isEmpty) _selectedSemester = "114-1";
+      options.insert(0, "114-1");
+      if (_selectedSemester.isEmpty) _selectedSemester = "114-1";
     }
 
     return options;
   }
 
   Future<void> _fetchFromNetwork() async {
-    print("🚀 開始重新加載(全部list)...");
-    setState(() { 
-      _isLoading = true; 
-      _statusMessage = "讀取中..."; 
+    // debugPrint("🚀 開始重新加載(全部list)...");
+    setState(() {
+      _isLoading = true;
+      _statusMessage = "讀取中...";
     });
 
     try {
       var tasks = await ElearnService.instance.fetchTasks(_selectedSemester);
-      
+
       // 成功後記錄時間
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_elearn_fetch_time', DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(
+        'last_elearn_fetch_time',
+        DateTime.now().millisecondsSinceEpoch,
+      );
 
       if (mounted) {
         setState(() {
           _allTasks = tasks;
           _updateCourseOptions();
           _applyFilterAndSort();
+          _syncSelectedTask();
           _isLoading = false;
           _statusMessage = "";
         });
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint("Error: $e");
       if (mounted) {
-        setState(() { _isLoading = false; _statusMessage = "更新失敗"; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("更新失敗: $e")));
+        setState(() {
+          _isLoading = false;
+          _statusMessage = "更新失敗";
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("更新失敗: $e")));
       }
     }
   }
@@ -166,26 +191,35 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     // 2. 狀態篩選 (多選邏輯)
     if (_selectedStatusFilters.isNotEmpty) {
       temp = temp.where((t) {
-      // 狀態判斷
-      bool statusMatch = false;
-      if (!_selectedStatusFilters.any((f) => ["未完成", "已完成", "忽略"].contains(f))) {
-        statusMatch = true; // 如果沒選任何狀態篩選，預設全過
-      } else {
-        if (_selectedStatusFilters.contains("未完成") && !t.isSubmitted && !t.isIgnored) statusMatch = true;
-        if (_selectedStatusFilters.contains("已完成") && t.isSubmitted) statusMatch = true;
-        if (_selectedStatusFilters.contains("忽略") && t.isIgnored) statusMatch = true;
-      }
+        // 狀態判斷
+        bool statusMatch = false;
+        if (!_selectedStatusFilters.any(
+          (f) => ["未完成", "已完成", "忽略"].contains(f),
+        )) {
+          statusMatch = true; // 如果沒選任何狀態篩選，預設全過
+        } else {
+          if (_selectedStatusFilters.contains("未完成") &&
+              !t.isSubmitted &&
+              !t.isIgnored)
+            statusMatch = true;
+          if (_selectedStatusFilters.contains("已完成") && t.isSubmitted)
+            statusMatch = true;
+          if (_selectedStatusFilters.contains("忽略") && t.isIgnored)
+            statusMatch = true;
+        }
 
-      // 類型判斷
-      bool typeMatch = false;
-      if (!_selectedStatusFilters.any((f) => ["測驗", "作業"].contains(f))) {
-        typeMatch = true; // 如果沒選任何類型篩選，預設全過
-      } else {
-        if (_selectedStatusFilters.contains("測驗") && t.type == "測驗") typeMatch = true;
-        if (_selectedStatusFilters.contains("作業") && t.type == "作業") typeMatch = true;
-      }
+        // 類型判斷
+        bool typeMatch = false;
+        if (!_selectedStatusFilters.any((f) => ["測驗", "作業"].contains(f))) {
+          typeMatch = true; // 如果沒選任何類型篩選，預設全過
+        } else {
+          if (_selectedStatusFilters.contains("測驗") && t.type == "測驗")
+            typeMatch = true;
+          if (_selectedStatusFilters.contains("作業") && t.type == "作業")
+            typeMatch = true;
+        }
 
-      return statusMatch && typeMatch;
+        return statusMatch && typeMatch;
       }).toList();
     }
 
@@ -193,7 +227,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     temp.sort((a, b) {
       DateTime timeA = a.endTime ?? DateTime(1900);
       DateTime timeB = b.endTime ?? DateTime(1900);
-      return timeB.compareTo(timeA); 
+      return timeB.compareTo(timeA);
     });
 
     setState(() {
@@ -202,19 +236,27 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
   }
 
   void _openDetail(ElearnTask task) async {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth >= 900) {
+      setState(() {
+        _selectedTask = task;
+      });
+      return;
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => task.type == "測驗" 
+        builder: (context) => task.type == "測驗"
             ? ExamDetailPage(
-                examId: task.id, 
-                title: task.title, 
+                examId: task.id,
+                title: task.title,
                 isIgnored: task.isIgnored,
                 isSubmitted: task.isSubmitted,
               )
             : HomeworkDetailPage(
-                homeworkId: task.id, 
-                title: task.title, 
+                homeworkId: task.id,
+                title: task.title,
                 isIgnored: task.isIgnored,
                 isSubmitted: task.isSubmitted,
               ),
@@ -225,119 +267,128 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     if (result == true) {
       // 這裡直接重新讀取快取即可，因為 Service 裡的 toggleIgnore 已經更新了快取
       // 不需要重新聯網，除非您希望強制同步
-      _initData(); 
+      _initData();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("作業與考試"),
-        centerTitle: true,
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-        actions: [
-          _isLoading 
-            ? const Padding(
-                padding: EdgeInsets.only(right: 16.0),
-                child: SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                ),
-              )
-            : IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _fetchFromNetwork, // 手動按按鈕，強制刷新 (忽略3分鐘限制)
-              )
-        ],
-      ),
-      body: Column(
-        children: [
-          // --- 篩選區 ---
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-                // 第一排：學期 與 課程
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedSemester,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          labelText: "學期",
-                        ),
-                        items: _semesterOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                        onChanged: _isLoading ? null : (val) {
-                          if (val != null) {
-                            setState(() => _selectedSemester = val);
-                            _fetchFromNetwork(); // 切換學期時強制刷新
-                          }
-                        },
-                      ),
+  Widget _buildListColumn(
+    BuildContext context,
+    bool isDark,
+    ColorScheme colorScheme,
+  ) {
+    return Column(
+      children: [
+        // --- 篩選區 ---
+        Container(
+          padding: const EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 4,
+            bottom: 8,
+          ),
+          color: isDark ? colorScheme.cardBackground : Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 第一排：學期 與 課程
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: GlassSingleSelectDropdown(
+                      label: "學期",
+                      items: _semesterOptions,
+                      value: _semesterOptions.contains(_selectedSemester)
+                          ? _selectedSemester
+                          : (_semesterOptions.isNotEmpty
+                                ? _semesterOptions.first
+                                : ""),
+                      dense: true,
+                      onChanged: _isLoading
+                          ? null
+                          : (val) {
+                              if (val != null) {
+                                setState(() => _selectedSemester = val);
+                                _fetchFromNetwork();
+                              }
+                            },
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 3,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedCourse,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          labelText: "課程篩選",
-                        ),
-                        items: _courseOptions.map((c) => DropdownMenuItem(
-                          value: c, 
-                          child: Text(c, overflow: TextOverflow.ellipsis)
-                        )).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() {
-                              _selectedCourse = val;
-                              _applyFilterAndSort();
-                            });
-                          }
-                        },
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 3,
+                    child: GlassSingleSelectDropdown(
+                      label: "課程篩選",
+                      items: _courseOptions,
+                      value: _courseOptions.contains(_selectedCourse)
+                          ? _selectedCourse
+                          : ("所有課程"),
+                      dense: true,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _selectedCourse = val;
+                            _applyFilterAndSort();
+                          });
+                        }
+                      },
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildStatusChip("未完成")),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildStatusChip("已完成")),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildStatusChip("忽略")),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildStatusChip("測驗")),
-                    const SizedBox(width: 4),
-                    Expanded(child: _buildStatusChip("作業")),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildStatusChip("未完成")),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildStatusChip("已完成")),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildStatusChip("忽略")),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildStatusChip("測驗")),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildStatusChip("作業")),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // --- 列表區 ---
+        if (_isLoading && _displayedTasks.isEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "讀取資料中...",
+                    style: TextStyle(
+                      color: isDark ? colorScheme.primaryText : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const CircularProgressIndicator(),
+                ],
+              ),
             ),
           ),
-          
-          // --- 列表區 ---
-          if (_isLoading && _displayedTasks.isEmpty)
-             Expanded(child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Text("讀取資料中..."), const SizedBox(height: 10), const CircularProgressIndicator()]))),
 
-          if (!_isLoading || _displayedTasks.isNotEmpty)
-            Expanded(
-              child: Container(
-                color: Colors.grey[100],
-                child: _displayedTasks.isEmpty
-                  ? Center(child: Text("此學期沒有符合條件的任務", style: TextStyle(color: Colors.grey[600])))
+        if (!_isLoading || _displayedTasks.isNotEmpty)
+          Expanded(
+            child: Container(
+              color: isDark ? colorScheme.scaffoldBackground : Colors.grey[100],
+              child: _displayedTasks.isEmpty
+                  ? Center(
+                      child: Text(
+                        "此學期沒有符合條件的任務",
+                        style: TextStyle(
+                          color: isDark
+                              ? colorScheme.subtitleText
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: _displayedTasks.length,
@@ -345,65 +396,203 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
                         return _buildTaskCard(_displayedTasks[index]);
                       },
                     ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDetailPlaceholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 64,
+              color: isDark
+                  ? colorScheme.subtitleText.withOpacity(0.5)
+                  : Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "請選擇作業或測驗以查看詳情",
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark ? colorScheme.subtitleText : Colors.grey[600],
+                fontWeight: FontWeight.w500,
               ),
             ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth >= 900;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("作業與考試"),
+        centerTitle: true,
+        actions: [
+          _isLoading
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: isDark ? colorScheme.primaryText : Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _fetchFromNetwork, // 手動按按鈕，強制刷新 (忽略3分鐘限制)
+                ),
+        ],
+        bottom: isWideScreen
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(1.0),
+                child: Container(color: colorScheme.borderColor, height: 1.0),
+              )
+            : null,
+      ),
+      body: isWideScreen
+          ? Row(
+              children: [
+                Expanded(
+                  flex: 45,
+                  child: _buildListColumn(context, isDark, colorScheme),
+                ),
+                VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: colorScheme.borderColor,
+                ),
+                Expanded(
+                  flex: 55,
+                  child: _selectedTask == null
+                      ? _buildDetailPlaceholder(context)
+                      : (_selectedTask!.type == "測驗"
+                            ? ExamDetailPage(
+                                key: ValueKey("exam_${_selectedTask!.id}"),
+                                examId: _selectedTask!.id,
+                                title: _selectedTask!.title,
+                                isIgnored: _selectedTask!.isIgnored,
+                                isSubmitted: _selectedTask!.isSubmitted,
+                                onStatusChanged: _initData,
+                                showAppBar: false,
+                              )
+                            : HomeworkDetailPage(
+                                key: ValueKey("homework_${_selectedTask!.id}"),
+                                homeworkId: _selectedTask!.id,
+                                title: _selectedTask!.title,
+                                isIgnored: _selectedTask!.isIgnored,
+                                isSubmitted: _selectedTask!.isSubmitted,
+                                onStatusChanged: _initData,
+                                showAppBar: false,
+                              )),
+                ),
+              ],
+            )
+          : _buildListColumn(context, isDark, colorScheme),
     );
   }
 
   Widget _buildStatusChip(String label) {
     bool isSelected = _selectedStatusFilters.contains(label);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+    final primaryColor = isDark ? colorScheme.secondary : Colors.indigo;
+
     return FilterChip(
-      label: Center( // 確保文字置中
-      child: Text(
-        label, 
-        style: TextStyle(
-          fontSize: 11, // 稍微縮小字體以適應寬度
-          color: isSelected ? Colors.indigo : Colors.black87,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        )
-      )
-    ),
-    selected: isSelected,
-    onSelected: (bool selected) {
-      setState(() {
-        if (selected) {
-          _selectedStatusFilters.add(label);
-        } else {
-          _selectedStatusFilters.remove(label);
-        }
-        _applyFilterAndSort();
-      });
-    },
+      label: Center(
+        // 確保文字置中
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11, // 稍微縮小字體以適應寬度
+            color: isSelected
+                ? primaryColor
+                : (isDark ? colorScheme.primaryText : Colors.black87),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (bool selected) {
+        setState(() {
+          if (selected) {
+            _selectedStatusFilters.add(label);
+          } else {
+            _selectedStatusFilters.remove(label);
+          }
+          _applyFilterAndSort();
+        });
+      },
       // 壓縮尺寸的關鍵設定
-    showCheckmark: false, // 移除選取時的打勾符號
-    visualDensity: VisualDensity.compact, // 緊湊佈局
-    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // 縮小點擊區域至標籤大小
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0), 
-    
-    selectedColor: Colors.indigo.withOpacity(0.2),
-    checkmarkColor: Colors.indigo,
-    labelStyle: TextStyle(
-      color: isSelected ? Colors.indigo : Colors.black87,
-      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      fontSize: 12, // 再次確保字體較小
-    ),
-      backgroundColor: Colors.grey[100],
+      showCheckmark: false, // 移除選取時的打勾符號
+      visualDensity: VisualDensity.compact, // 緊湊佈局
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // 縮小點擊區域至標籤大小
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+
+      selectedColor: primaryColor.withOpacity(0.2),
+      checkmarkColor: primaryColor,
+      labelStyle: TextStyle(
+        color: isSelected
+            ? primaryColor
+            : (isDark ? colorScheme.primaryText : Colors.black87),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 12, // 再次確保字體較小
+      ),
+      backgroundColor: isDark
+          ? colorScheme.secondaryCardBackground
+          : Colors.grey[100],
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: isSelected ? Colors.indigo : Colors.grey[300]!),
+        side: BorderSide(
+          color: isSelected
+              ? primaryColor
+              : (isDark ? colorScheme.borderColor : Colors.grey[300]!),
+        ),
       ),
     );
   }
 
   Widget _buildTaskCard(ElearnTask task) {
     final dateFormat = DateFormat('yyyy/MM/dd HH:mm');
-    bool isOverdue = task.endTime != null && task.endTime!.isBefore(DateTime.now()) && !task.isSubmitted;
-    
+    bool isOverdue =
+        task.endTime != null &&
+        task.endTime!.isBefore(DateTime.now()) &&
+        !task.isSubmitted;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDark;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth >= 900;
+    final isSelected =
+        isWideScreen &&
+        _selectedTask?.id == task.id &&
+        _selectedTask?.type == task.type;
+    final primaryColor = isDark ? colorScheme.secondary : Colors.indigo;
+
     Color statusColor;
     String statusText;
-    
+
     if (task.isIgnored) {
       statusColor = Colors.blue;
       statusText = "已忽略";
@@ -418,106 +607,200 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
       statusText = task.statusRaw;
     }
 
-    IconData typeIcon = task.type == "作業" ? Icons.assignment_outlined : Icons.quiz_outlined;
-    Color typeColor = task.type == "作業" ? Colors.blueAccent : Colors.purpleAccent;
-
     return Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => _openDetail(task),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 第一排：課程名稱與類型標籤
-            Row(
-              children: [
-                Expanded(child: Text(task.courseName, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-                _buildTypeBadge(task), // 顯示「作業」或「測驗」的小標籤
-              ],
-            ),
-            const SizedBox(height: 8),
-            // 第二排：標題與分數
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: Text(task.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))),
-                if (task.score != null) _buildScoreBadge(task.score!), // 顯示分數
-              ],
-            ),
-            const SizedBox(height: 12),
-            Divider(height: 1, color: Colors.grey[200]),
-            const SizedBox(height: 10),
-            // 第三排：時間 (左) 與 狀態 (右)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, // 關鍵：左右分開
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 左下角：時間
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 4),
-                    Text(task.endTime != null ? dateFormat.format(task.endTime!) : "無期限", 
-                         style: TextStyle(fontSize: 13, color: Colors.grey[700])),
-                  ],
-                ),
-                // 右下角：狀態標籤
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withOpacity(0.3))
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: isSelected ? 4 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isSelected
+            ? BorderSide(color: primaryColor, width: 2)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openDetail(task),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 第一排：課程名稱與類型標籤
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      task.courseName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? colorScheme.subtitleText
+                            : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  _buildTypeBadge(task), // 顯示「作業」或「測驗」的小標籤
+                ],
+              ),
+              const SizedBox(height: 8),
+              // 第二排：標題與分數
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark
+                            ? colorScheme.primaryText
+                            : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  if (task.score != null)
+                    _buildScoreBadge(task.score!, isDark, colorScheme), // 顯示分數
+                ],
+              ),
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: isDark ? colorScheme.borderColor : Colors.grey[200],
+              ),
+              const SizedBox(height: 10),
+              // 第三排：時間 (左) 與 狀態 (右)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, // 關鍵：左右分開
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // 左下角：時間
+                  Row(
                     children: [
-                      Icon(task.isIgnored ? Icons.visibility_off : (task.isSubmitted ? Icons.check_circle : Icons.circle_outlined), 
-                           size: 14, color: statusColor),
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: isDark
+                            ? colorScheme.subtitleText
+                            : Colors.grey[500],
+                      ),
                       const SizedBox(width: 4),
-                      Text(statusText, style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.bold)),
+                      Text(
+                        task.endTime != null
+                            ? dateFormat.format(task.endTime!)
+                            : "無期限",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark
+                              ? colorScheme.bodyText
+                              : Colors.grey[700],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ],
+                  // 右下角：狀態標籤
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: statusColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          task.isIgnored
+                              ? Icons.visibility_off
+                              : (task.isSubmitted
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined),
+                          size: 14,
+                          color: statusColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          statusText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-// 輔助方法：類型小標籤 (測驗/作業)
-Widget _buildTypeBadge(ElearnTask task) {
-  Color typeColor = task.type == "作業" ? Colors.blueAccent : Colors.purpleAccent;
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(color: typeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-    child: Text(task.type, style: TextStyle(fontSize: 10, color: typeColor, fontWeight: FontWeight.bold)),
-  );
-}
+  // 輔助方法：類型小標籤 (測驗/作業)
+  Widget _buildTypeBadge(ElearnTask task) {
+    Color typeColor = task.type == "作業"
+        ? Colors.blueAccent
+        : Colors.purpleAccent;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: typeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        task.type,
+        style: TextStyle(
+          fontSize: 10,
+          color: typeColor,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
 
-// 輔助方法：分數小方塊
-Widget _buildScoreBadge(double score) {
-  return Container(
-    margin: const EdgeInsets.only(left: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: Colors.amber.shade50,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: Colors.amber.shade200),
-    ),
-    child: Column(
-      children: [
-        Text("SCORE", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
-        Text("$score", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
-      ],
-    ),
-  );
-}}
+  // 輔助方法：分數小方塊
+  Widget _buildScoreBadge(double score, bool isDark, ColorScheme colorScheme) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.amber.shade900.withOpacity(0.3)
+            : Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isDark
+              ? Colors.amber.shade800.withOpacity(0.5)
+              : Colors.amber.shade200,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            "SCORE",
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.amber.shade400 : Colors.amber.shade800,
+            ),
+          ),
+          Text(
+            score.toString().replaceAll(RegExp(r'\.0$'), ''),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

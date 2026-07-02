@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:html/parser.dart' as parser;
@@ -14,8 +15,8 @@ class ElearnTask {
   final String type;
   final bool isSubmitted;
   final DateTime? endTime;
-  String statusRaw; 
-  bool isIgnored;   
+  String statusRaw;
+  bool isIgnored;
 
   ElearnTask({
     required this.id,
@@ -62,15 +63,17 @@ class ElearnService {
 
   final String _baseUrl = "https://elearn.nsysu.edu.tw";
   final Map<String, String> _baseHeaders = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept":
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
   };
 
   Map<String, String> _cookieJar = {};
   DateTime? _lastLoginTime;
-  
+
   static const String _ignoredKey = "ignored_task_ids";
   static const String _cachedTasksKey = "cached_elearn_tasks";
 
@@ -78,7 +81,7 @@ class ElearnService {
 
   Future<List<ElearnTask>> fetchTasks(String semesterCode) async {
     await _ensureAuthenticated();
-    
+
     // 1. 抓取網路資料
     List<ElearnTask> tasks = await _getCourseData(semesterCode);
 
@@ -109,9 +112,9 @@ class ElearnService {
     } else {
       ignoredIds.remove(idStr);
     }
-    
+
     await prefs.setStringList(_ignoredKey, ignoredIds);
-    
+
     // 更新目前的快取資料，確保狀態一致
     await _updateCacheIgnoreStatus(id, ignore);
   }
@@ -123,7 +126,9 @@ class ElearnService {
     for (var t in tasks) {
       if (t.id == id) {
         t.isIgnored = ignore;
-        t.statusRaw = ignore ? "已忽略" : (t.isSubmitted ? "已繳交" : "未繳交"); // 簡單恢復狀態
+        t.statusRaw = ignore
+            ? "已忽略"
+            : (t.isSubmitted ? "已繳交" : "未繳交"); // 簡單恢復狀態
         changed = true;
         break;
       }
@@ -140,7 +145,7 @@ class ElearnService {
     await prefs.remove('last_elearn_fetch_time'); // 清除時間戳記
     _cookieJar.clear();
     _lastLoginTime = null;
-    print("🧹 ElearnService 快取已清除");
+    debugPrint("🧹 ElearnService 快取已清除");
   }
 
   // 讀取快取 (並重新應用忽略邏輯)
@@ -149,8 +154,10 @@ class ElearnService {
     if (prefs.containsKey(_cachedTasksKey)) {
       final String jsonStr = prefs.getString(_cachedTasksKey)!;
       final List<dynamic> jsonList = jsonDecode(jsonStr);
-      List<ElearnTask> tasks = jsonList.map((e) => ElearnTask.fromJson(e)).toList();
-      
+      List<ElearnTask> tasks = jsonList
+          .map((e) => ElearnTask.fromJson(e))
+          .toList();
+
       // 重新檢查忽略清單 (防止快取存的是舊狀態)
       final List<String> ignoredIds = prefs.getStringList(_ignoredKey) ?? [];
       for (var task in tasks) {
@@ -178,10 +185,18 @@ class ElearnService {
     try {
       final infoRes = await _get("$_baseUrl/api/exams/$examId", client);
       if (infoRes.statusCode != 200) throw Exception("無法讀取測驗資料");
-      final subRes = await _get("$_baseUrl/api/exams/$examId/submissions", client);
+      final subRes = await _get(
+        "$_baseUrl/api/exams/$examId/submissions",
+        client,
+      );
       if (subRes.statusCode != 200) throw Exception("無法讀取繳交紀錄");
-      return {"info": jsonDecode(infoRes.body), "submissions": jsonDecode(subRes.body)};
-    } finally { client.close(); }
+      return {
+        "info": jsonDecode(infoRes.body),
+        "submissions": jsonDecode(subRes.body),
+      };
+    } finally {
+      client.close();
+    }
   }
 
   Future<Map<String, dynamic>> fetchHomeworkDetails(int homeworkId) async {
@@ -191,7 +206,9 @@ class ElearnService {
       final res = await _get("$_baseUrl/api/activities/$homeworkId", client);
       if (res.statusCode != 200) throw Exception("無法讀取作業資料");
       return jsonDecode(res.body);
-    } finally { client.close(); }
+    } finally {
+      client.close();
+    }
   }
 
   Future<File> downloadFile(int referenceId, String fileName) async {
@@ -199,15 +216,22 @@ class ElearnService {
     final client = http.Client();
     try {
       final url = "$_baseUrl/api/uploads/reference/$referenceId/blob";
-      final response = await client.get(Uri.parse(url), headers: {..._baseHeaders, "Cookie": _generateCookieHeader()});
+      final response = await client.get(
+        Uri.parse(url),
+        headers: {..._baseHeaders, "Cookie": _generateCookieHeader()},
+      );
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
         final safeName = fileName.replaceAll(RegExp(r'[^\w\s\.]'), '_');
         final file = File('${dir.path}/$safeName');
         await file.writeAsBytes(response.bodyBytes);
         return file;
-      } else { throw Exception("下載失敗: ${response.statusCode}"); }
-    } finally { client.close(); }
+      } else {
+        throw Exception("下載失敗: ${response.statusCode}");
+      }
+    } finally {
+      client.close();
+    }
   }
 
   // ... (內部 Login 邏輯保持不變) ...
@@ -220,7 +244,7 @@ class ElearnService {
     bool needsLogin = _cookieJar.isEmpty || _lastLoginTime == null;
     if (!needsLogin) {
       if (DateTime.now().difference(_lastLoginTime!).inMinutes >= 10) {
-        print("⏳ Cookie 已過期 (>10min)，正在自動重新登入...");
+        debugPrint("⏳ Cookie 已過期 (>10min)，正在自動重新登入...");
         needsLogin = true;
       }
     }
@@ -228,7 +252,7 @@ class ElearnService {
       _cookieJar.clear();
       await _login(username, password);
       _lastLoginTime = DateTime.now();
-      print("✅ E-learn 登入成功");
+      debugPrint("✅ E-learn 登入成功");
     }
   }
 
@@ -241,11 +265,12 @@ class ElearnService {
 
       var document = parser.parse(res1.body);
       var form = document.querySelector("form[action*='login-actions']");
-      if (form == null && res1.body.contains("登出")) return; 
+      if (form == null && res1.body.contains("登出")) return;
       if (form == null) throw Exception("找不到登入表單");
 
       String authUrl = form.attributes['action']!;
-      if (authUrl.startsWith('/')) authUrl = "https://identity.nsysu.edu.tw$authUrl";
+      if (authUrl.startsWith('/'))
+        authUrl = "https://identity.nsysu.edu.tw$authUrl";
 
       final request = http.Request('POST', Uri.parse(authUrl))
         ..followRedirects = false
@@ -259,23 +284,29 @@ class ElearnService {
       _updateCookies(res2);
       await _followRedirectChain(res2, client);
     } catch (e) {
-      print("Login Error: $e");
+      debugPrint("Login Error: $e");
       rethrow;
-    } finally { client.close(); }
+    } finally {
+      client.close();
+    }
   }
 
-  Future<void> _followRedirectChain(http.Response response, http.Client client) async {
+  Future<void> _followRedirectChain(
+    http.Response response,
+    http.Client client,
+  ) async {
     http.Response currentRes = response;
     int limit = 10;
-    while (limit > 0 && (currentRes.statusCode == 302 || currentRes.statusCode == 301)) {
+    while (limit > 0 &&
+        (currentRes.statusCode == 302 || currentRes.statusCode == 301)) {
       String? location = currentRes.headers['location'];
       if (location == null) break;
       if (location.startsWith('/')) {
-         if (currentRes.request!.url.host.contains("identity")) {
-             if (!location.startsWith("http")) location = "$_baseUrl$location";
-         } else {
-             location = "$_baseUrl$location";
-         }
+        if (currentRes.request!.url.host.contains("identity")) {
+          if (!location.startsWith("http")) location = "$_baseUrl$location";
+        } else {
+          location = "$_baseUrl$location";
+        }
       }
       final nextReq = http.Request('GET', Uri.parse(location))
         ..followRedirects = false
@@ -294,81 +325,134 @@ class ElearnService {
     final client = http.Client();
     try {
       var courseRes = await _post(
-        "$_baseUrl/api/my-courses", client,
+        "$_baseUrl/api/my-courses",
+        client,
         body: jsonEncode({
           "fields": "id,name,semester",
           "page_size": 100,
-          "conditions": {"status": ["ongoing", "notStarted", "closed"]}
+          "conditions": {
+            "status": ["ongoing", "notStarted", "closed"],
+          },
         }),
-        isJson: true
+        isJson: true,
       );
-      if (courseRes.statusCode != 200) throw Exception("API Error: ${courseRes.statusCode}");
+      if (courseRes.statusCode != 200)
+        throw Exception("API Error: ${courseRes.statusCode}");
       var courseData = jsonDecode(courseRes.body)["courses"] as List;
-      var targetCourses = courseData.where((c) => c["semester"]?["code"] == semesterCode).toList();
+      var targetCourses = courseData
+          .where((c) => c["semester"]?["code"] == semesterCode)
+          .toList();
 
       for (var course in targetCourses) {
         String courseId = course["id"].toString();
         String courseName = course["name"];
         // HW
-        var hwRes = await _get("$_baseUrl/api/courses/$courseId/homework-activities?page_size=100", client);
+        var hwRes = await _get(
+          "$_baseUrl/api/courses/$courseId/homework-activities?page_size=100",
+          client,
+        );
         if (hwRes.statusCode == 200) {
           var hws = jsonDecode(hwRes.body)["homework_activities"] as List;
           for (var hw in hws) {
             bool submitted = hw["submitted"] ?? false;
-            allTasks.add(ElearnTask(
-              id: hw["id"],
-              courseName: courseName,
-              title: hw["title"],
-              type: "作業",
-              isSubmitted: submitted,
-              endTime: _parseTime(hw["end_time"]),
-              statusRaw: submitted ? "已繳交" : "未繳交",
-            ));
+            var rawScore = hw["score"] ?? hw["final_score"];
+            double? currentScore = rawScore != null
+                ? double.tryParse(rawScore.toString())
+                : null;
+            allTasks.add(
+              ElearnTask(
+                id: hw["id"],
+                courseName: courseName,
+                title: hw["title"],
+                type: "作業",
+                isSubmitted: submitted,
+                endTime: _parseTime(hw["end_time"]),
+                statusRaw: submitted ? "已繳交" : "未繳交",
+                score: currentScore,
+              ),
+            );
           }
         }
         // Exam
-        var exRes = await _get("$_baseUrl/api/courses/$courseId/exam-list?page_size=100", client);
+        var exRes = await _get(
+          "$_baseUrl/api/courses/$courseId/exam-list?page_size=100",
+          client,
+        );
         if (exRes.statusCode == 200) {
           var exJson = jsonDecode(exRes.body);
-          var exams = (exJson["exams"] ?? exJson["exam_activities"] ?? []) as List;
+          var exams =
+              (exJson["exams"] ?? exJson["exam_activities"] ?? []) as List;
           for (var ex in exams) {
-             int submitCount = ex["submission_count"] ?? 0;
-             bool submitted = submitCount > 0;
-             var rawScore = ex["final_score"] ?? ex["score"];
-             double? currentScore = rawScore != null ? double.tryParse(rawScore.toString()) : null;
-             allTasks.add(ElearnTask(
-              id: ex["id"],
-              courseName: courseName,
-              title: ex["title"] ?? ex["name"],
-              type: "測驗",
-              isSubmitted: submitted,
-              endTime: _parseTime(ex["end_time"]),
-              statusRaw: submitted ? "已測驗" : "未測驗",
-              score: currentScore, // 存入分數
-            ));
+            int submitCount = ex["submission_count"] ?? 0;
+            bool submitted = submitCount > 0;
+            var rawScore = ex["final_score"] ?? ex["score"];
+            double? currentScore = rawScore != null
+                ? double.tryParse(rawScore.toString())
+                : null;
+            allTasks.add(
+              ElearnTask(
+                id: ex["id"],
+                courseName: courseName,
+                title: ex["title"] ?? ex["name"],
+                type: "測驗",
+                isSubmitted: submitted,
+                endTime: _parseTime(ex["end_time"]),
+                statusRaw: submitted ? "已測驗" : "未測驗",
+                score: currentScore, // 存入分數
+              ),
+            );
           }
         }
       }
-    } finally { client.close(); }
+    } finally {
+      client.close();
+    }
     return allTasks;
   }
 
   // --- Helpers ---
   Future<http.Response> _get(String url, http.Client client) async {
-    final response = await client.get(Uri.parse(url), headers: {..._baseHeaders, "Cookie": _generateCookieHeader()});
+    final response = await client.get(
+      Uri.parse(url),
+      headers: {..._baseHeaders, "Cookie": _generateCookieHeader()},
+    );
     _updateCookies(response);
     return response;
   }
-  Future<http.Response> _post(String url, http.Client client, {Object? body, bool isJson = false}) async {
-    final response = await client.post(Uri.parse(url), headers: {..._baseHeaders, "Cookie": _generateCookieHeader(), if (isJson) "Content-Type": "application/json"}, body: body);
+
+  Future<http.Response> _post(
+    String url,
+    http.Client client, {
+    Object? body,
+    bool isJson = false,
+  }) async {
+    final response = await client.post(
+      Uri.parse(url),
+      headers: {
+        ..._baseHeaders,
+        "Cookie": _generateCookieHeader(),
+        if (isJson) "Content-Type": "application/json",
+      },
+      body: body,
+    );
     _updateCookies(response);
     return response;
   }
+
   void _updateCookies(http.Response response) {
     String? setCookieRaw = response.headers['set-cookie'];
     if (setCookieRaw == null) return;
     var cookies = _splitSetCookie(setCookieRaw);
-    final ignoreKeys = {'path', 'expires', 'domain', 'max-age', 'secure', 'httponly', 'samesite', 'priority'};
+    final ignoreKeys = {
+      'path',
+      'expires',
+      'domain',
+      'max-age',
+      'secure',
+      'httponly',
+      'samesite',
+      'priority',
+    };
     for (var c in cookies) {
       int idx = c.indexOf('=');
       if (idx == -1) continue;
@@ -378,6 +462,7 @@ class ElearnService {
       if (!ignoreKeys.contains(key.toLowerCase())) _cookieJar[key] = value;
     }
   }
+
   List<String> _splitSetCookie(String setCookie) {
     List<String> cookies = [];
     RegExp splitter = RegExp(r',(?=\s*[a-zA-Z0-9_-]+=)');
@@ -389,9 +474,15 @@ class ElearnService {
     cookies.add(setCookie.substring(start).trim());
     return cookies;
   }
-  String _generateCookieHeader() => _cookieJar.entries.map((e) => "${e.key}=${e.value}").join("; ");
+
+  String _generateCookieHeader() =>
+      _cookieJar.entries.map((e) => "${e.key}=${e.value}").join("; ");
   DateTime? _parseTime(String? timeStr) {
     if (timeStr == null) return null;
-    try { return DateTime.parse(timeStr).toLocal(); } catch (e) { return null; }
+    try {
+      return DateTime.parse(timeStr).toLocal();
+    } catch (e) {
+      return null;
+    }
   }
 }

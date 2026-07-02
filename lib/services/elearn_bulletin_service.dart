@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:html/parser.dart' as parser;
@@ -31,11 +32,11 @@ class BulletinAttachment {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'reference_id': referenceId,
-        'name': name,
-        'size': size,
-      };
+    'id': id,
+    'reference_id': referenceId,
+    'name': name,
+    'size': size,
+  };
 }
 
 class ElearnBulletin {
@@ -63,34 +64,45 @@ class ElearnBulletin {
   DateTime get effectiveTime => updatedAt ?? createdAt ?? DateTime.now();
 
   // 修改 ElearnBulletin 的 fromJson
-  factory ElearnBulletin.fromJson(Map<String, dynamic> json, {String courseName = ""}) {
+  factory ElearnBulletin.fromJson(
+    Map<String, dynamic> json, {
+    String courseName = "",
+  }) {
     List<BulletinAttachment> atts = [];
     if (json['uploads'] != null) {
-      atts = (json['uploads'] as List).map((e) => BulletinAttachment.fromJson(e)).toList();
+      atts = (json['uploads'] as List)
+          .map((e) => BulletinAttachment.fromJson(e))
+          .toList();
     }
 
     return ElearnBulletin(
       id: json['id'] ?? 0,
       courseId: json['course_id'] ?? 0,
       // [修正重點]：如果傳入的 courseName 是空的，就嘗試從 JSON (快取) 中讀取
-      courseName: (courseName.isNotEmpty) ? courseName : (json['courseName'] ?? ""), 
+      courseName: (courseName.isNotEmpty)
+          ? courseName
+          : (json['courseName'] ?? ""),
       title: json['title'] ?? "無標題",
       contentRaw: json['content'] ?? "",
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']).toLocal() : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']).toLocal() : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at']).toLocal()
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at']).toLocal()
+          : null,
       uploads: atts,
     );
   }
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'course_id': courseId,
-        'courseName': courseName,
-        'title': title,
-        'content': contentRaw,
-        'created_at': createdAt?.toIso8601String(),
-        'updated_at': updatedAt?.toIso8601String(), // 新增
-        'uploads': uploads.map((e) => e.toJson()).toList(),
-      };
+    'id': id,
+    'course_id': courseId,
+    'courseName': courseName,
+    'title': title,
+    'content': contentRaw,
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(), // 新增
+    'uploads': uploads.map((e) => e.toJson()).toList(),
+  };
 }
 
 // --- Service ---
@@ -119,10 +131,13 @@ class ElearnBulletinService {
   /// 取得公告列表
   /// [forceRefresh] 強制刷新
   /// [pageSize] 設定抓取筆數 (預設30, 最大100)
-  Future<List<ElearnBulletin>> fetchBulletins({bool forceRefresh = false, int pageSize = 30}) async {
+  Future<List<ElearnBulletin>> fetchBulletins({
+    bool forceRefresh = false,
+    int pageSize = 30,
+  }) async {
     // 1. 檢查快取時間 (3分鐘內不自動重抓)
     if (!forceRefresh && await _isCacheValid()) {
-      print("🚀 使用公告快取資料");
+      debugPrint("🚀 使用公告快取資料");
       return await loadCachedBulletins();
     }
 
@@ -132,7 +147,10 @@ class ElearnBulletinService {
     Map<int, String> courseMap = await _getCourseNameMap();
 
     // 3. 抓取公告
-    List<ElearnBulletin> bulletins = await _getBulletinData(pageSize, courseMap);
+    List<ElearnBulletin> bulletins = await _getBulletinData(
+      pageSize,
+      courseMap,
+    );
 
     // 4. 更新快取
     await cacheBulletins(bulletins);
@@ -146,8 +164,10 @@ class ElearnBulletinService {
     final client = http.Client();
     try {
       final url = "$_baseUrl/api/uploads/reference/$referenceId/blob";
-      final response = await client.get(Uri.parse(url),
-          headers: {..._baseHeaders, "Cookie": _generateCookieHeader()});
+      final response = await client.get(
+        Uri.parse(url),
+        headers: {..._baseHeaders, "Cookie": _generateCookieHeader()},
+      );
 
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
@@ -172,7 +192,7 @@ class ElearnBulletinService {
     _cookieJar.clear();
     _lastLoginTime = null;
     _lastFetchTime = null;
-    print("🧹 ElearnBulletinService 快取已清除");
+    debugPrint("🧹 ElearnBulletinService 快取已清除");
   }
 
   // --- 內部邏輯 & 爬蟲 ---
@@ -183,10 +203,10 @@ class ElearnBulletinService {
     }
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey(_cachedFetchTimeKey)) return false;
-    
+
     final timeStr = prefs.getString(_cachedFetchTimeKey);
     if (timeStr == null) return false;
-    
+
     final lastTime = DateTime.parse(timeStr);
     _lastFetchTime = lastTime;
     return DateTime.now().difference(lastTime).inMinutes < 3;
@@ -205,7 +225,7 @@ class ElearnBulletinService {
   Future<void> cacheBulletins(List<ElearnBulletin> list) async {
     final prefs = await SharedPreferences.getInstance();
     final String jsonStr = jsonEncode(list.map((e) => e.toJson()).toList());
-    
+
     final now = DateTime.now();
     await prefs.setString(_cachedBulletinsKey, jsonStr);
     await prefs.setString(_cachedFetchTimeKey, now.toIso8601String());
@@ -218,13 +238,17 @@ class ElearnBulletinService {
     Map<int, String> map = {};
     try {
       var courseRes = await _post(
-          "$_baseUrl/api/my-courses", client,
-          body: jsonEncode({
-            "fields": "id,name,semester",
-            "page_size": 100, // 抓多一點確保都有
-            "conditions": {"status": ["ongoing", "notStarted", "closed"]}
-          }),
-          isJson: true);
+        "$_baseUrl/api/my-courses",
+        client,
+        body: jsonEncode({
+          "fields": "id,name,semester",
+          "page_size": 100, // 抓多一點確保都有
+          "conditions": {
+            "status": ["ongoing", "notStarted", "closed"],
+          },
+        }),
+        isJson: true,
+      );
 
       if (courseRes.statusCode == 200) {
         var courseData = jsonDecode(courseRes.body)["courses"] as List;
@@ -235,7 +259,7 @@ class ElearnBulletinService {
         }
       }
     } catch (e) {
-      print("⚠️ 取得課程名稱失敗: $e");
+      debugPrint("⚠️ 取得課程名稱失敗: $e");
     } finally {
       client.close();
     }
@@ -243,7 +267,10 @@ class ElearnBulletinService {
   }
 
   // 實際抓取公告 API
-  Future<List<ElearnBulletin>> _getBulletinData(int pageSize, Map<int, String> courseMap) async {
+  Future<List<ElearnBulletin>> _getBulletinData(
+    int pageSize,
+    Map<int, String> courseMap,
+  ) async {
     final client = http.Client();
     List<ElearnBulletin> results = [];
     try {
@@ -252,17 +279,19 @@ class ElearnBulletinService {
         "keyword": "",
         "start_date": "",
         "end_date": "",
-        "course_ids": []
+        "course_ids": [],
       };
-      
-      String params = Uri(queryParameters: {
-        "conditions": jsonEncode(conditions),
-        "page": "1",
-        "page_size": pageSize.toString(),
-      }).query;
+
+      String params = Uri(
+        queryParameters: {
+          "conditions": jsonEncode(conditions),
+          "page": "1",
+          "page_size": pageSize.toString(),
+        },
+      ).query;
 
       final res = await _get("$_baseUrl/api/course-bulletins?$params", client);
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final List bulletins = data['bulletins'] ?? [];
@@ -282,7 +311,7 @@ class ElearnBulletinService {
   }
 
   // --- 認證與網路請求 (與 Task Service 共用邏輯) ---
-  
+
   Future<void> _ensureAuthenticated() async {
     final prefs = await SharedPreferences.getInstance();
     final username = (prefs.getString('username') ?? "").trim();
@@ -315,7 +344,8 @@ class ElearnBulletinService {
       if (form == null) throw Exception("找不到登入表單");
 
       String authUrl = form.attributes['action']!;
-      if (authUrl.startsWith('/')) authUrl = "https://identity.nsysu.edu.tw$authUrl";
+      if (authUrl.startsWith('/'))
+        authUrl = "https://identity.nsysu.edu.tw$authUrl";
 
       final request = http.Request('POST', Uri.parse(authUrl))
         ..followRedirects = false
@@ -329,25 +359,29 @@ class ElearnBulletinService {
       _updateCookies(res2);
       await _followRedirectChain(res2, client);
     } catch (e) {
-      print("Login Error: $e");
+      debugPrint("Login Error: $e");
       rethrow;
     } finally {
       client.close();
     }
   }
 
-  Future<void> _followRedirectChain(http.Response response, http.Client client) async {
+  Future<void> _followRedirectChain(
+    http.Response response,
+    http.Client client,
+  ) async {
     http.Response currentRes = response;
     int limit = 10;
-    while (limit > 0 && (currentRes.statusCode == 302 || currentRes.statusCode == 301)) {
+    while (limit > 0 &&
+        (currentRes.statusCode == 302 || currentRes.statusCode == 301)) {
       String? location = currentRes.headers['location'];
       if (location == null) break;
       if (location.startsWith('/')) {
-         if (currentRes.request!.url.host.contains("identity")) {
-             if (!location.startsWith("http")) location = "$_baseUrl$location";
-         } else {
-             location = "$_baseUrl$location";
-         }
+        if (currentRes.request!.url.host.contains("identity")) {
+          if (!location.startsWith("http")) location = "$_baseUrl$location";
+        } else {
+          location = "$_baseUrl$location";
+        }
       }
       final nextReq = http.Request('GET', Uri.parse(location))
         ..followRedirects = false
@@ -362,18 +396,29 @@ class ElearnBulletinService {
   }
 
   Future<http.Response> _get(String url, http.Client client) async {
-    final response = await client.get(Uri.parse(url), headers: {..._baseHeaders, "Cookie": _generateCookieHeader()});
+    final response = await client.get(
+      Uri.parse(url),
+      headers: {..._baseHeaders, "Cookie": _generateCookieHeader()},
+    );
     _updateCookies(response);
     return response;
   }
 
-  Future<http.Response> _post(String url, http.Client client, {Object? body, bool isJson = false}) async {
-    final response = await client.post(Uri.parse(url), 
+  Future<http.Response> _post(
+    String url,
+    http.Client client, {
+    Object? body,
+    bool isJson = false,
+  }) async {
+    final response = await client.post(
+      Uri.parse(url),
       headers: {
-        ..._baseHeaders, 
-        "Cookie": _generateCookieHeader(), 
-        if (isJson) "Content-Type": "application/json"
-      }, body: body);
+        ..._baseHeaders,
+        "Cookie": _generateCookieHeader(),
+        if (isJson) "Content-Type": "application/json",
+      },
+      body: body,
+    );
     _updateCookies(response);
     return response;
   }
@@ -382,7 +427,16 @@ class ElearnBulletinService {
     String? setCookieRaw = response.headers['set-cookie'];
     if (setCookieRaw == null) return;
     var cookies = _splitSetCookie(setCookieRaw);
-    final ignoreKeys = {'path', 'expires', 'domain', 'max-age', 'secure', 'httponly', 'samesite', 'priority'};
+    final ignoreKeys = {
+      'path',
+      'expires',
+      'domain',
+      'max-age',
+      'secure',
+      'httponly',
+      'samesite',
+      'priority',
+    };
     for (var c in cookies) {
       int idx = c.indexOf('=');
       if (idx == -1) continue;
@@ -405,5 +459,6 @@ class ElearnBulletinService {
     return cookies;
   }
 
-  String _generateCookieHeader() => _cookieJar.entries.map((e) => "${e.key}=${e.value}").join("; ");
+  String _generateCookieHeader() =>
+      _cookieJar.entries.map((e) => "${e.key}=${e.value}").join("; ");
 }

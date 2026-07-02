@@ -3,80 +3,51 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../utils/utils.dart'; // 請確保此路徑能正確引入包含 base64md5 的 Utils 類別
+
 import 'course_search_picker_page.dart'; // 確保路徑正確引入課程搜尋頁面
 import 'course_exception_download_page.dart';
+import '../../theme/app_theme.dart';
+import 'course_exception_models.dart';
+import 'widgets/abnormal_course_card.dart';
+import 'widgets/manual_course_card.dart';
+import 'widgets/inline_course_picker.dart';
+import '../../services/session_service.dart';
+import '../../utils/utils.dart';
 
-// --- 資料模型 ---
-
-/// 預設的異常處理課程 (從網頁抓取)
-class AbnormalCourse {
-  final String id;           // checkbox 的 name: CHEM624_22
-  final String actionName;   // 下拉選單 name: abn_SelClass_CHEM624_22
-  final String reasonName;   // 原因選單 name: abn_rsn_CHEM624_22
-  final String status;
-  final String courseNo;
-  final String courseName;
-  final String credits;
-  final String teacher;
-
-  bool isSelected = false;
-  String? selectedAction;
-  String? selectedReason;
-
-  AbnormalCourse({
-    required this.id,
-    required this.actionName,
-    required this.reasonName,
-    required this.status,
-    required this.courseNo,
-    required this.courseName,
-    required this.credits,
-    required this.teacher,
-  });
-}
-/// 自行輸入的課程
-class ManualCourse {
-  String? selectedAction;
-  String courseNo = "";
-  String? selectedReason;
-}
-
-/// 下拉選單的選項
-class ReasonOption {
-  final String value; // 代碼: A1
-  final String text; // 顯示文字
-
-  ReasonOption(this.value, this.text);
-}
-
-
-// --- 頁面主體 ---
+bool test = false;
 
 class CourseExceptionHandlingPage extends StatefulWidget {
   const CourseExceptionHandlingPage({Key? key}) : super(key: key);
 
   @override
-  State<CourseExceptionHandlingPage> createState() => _CourseExceptionHandlingPageState();
+  State<CourseExceptionHandlingPage> createState() =>
+      _CourseExceptionHandlingPageState();
 }
 
-class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPage> {
+class _CourseExceptionHandlingPageState
+    extends State<CourseExceptionHandlingPage> {
   bool _isLoading = true;
   String? _errorMessage;
-  
+
   // 爬取下來的資料
   List<AbnormalCourse> _courses = [];
   List<ReasonOption> _reasons = [];
-  
+
   // 非清單上的手動輸入課程 (網頁預設提供兩筆)
   final List<ManualCourse> _manualCourses = [];
 
   final http.Client _client = http.Client();
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
 
+  // Widescreen inline picker states
+  ManualCourse? _pickingManualCourse;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showNoticeDialog();
+    });
     _fetchAbnormalData();
   }
 
@@ -86,132 +57,236 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
     super.dispose();
   }
 
- 
-  
   // ==========================================================
   // 網路請求與爬蟲邏輯 (加入詳細偵錯 Print)
   // ==========================================================
-  
+
   Future<String?> _loginViaSSO2(String stuid, String password) async {
-    print("🔍 [_loginViaSSO2] 開始執行 SSO 登入流程...");
+    debugPrint("🔍 [_loginViaSSO2] 開始執行 SSO 登入流程...");
     final loginUri = Uri.parse("$_baseUrl/menu4/Studcheck_sso2.asp");
-    String encryptedPass = Utils.base64md5(password); 
-    
+    String encryptedPass = Utils.base64md5(password);
+
     try {
-      print("📡 [_loginViaSSO2] 發送 POST 請求至 $loginUri (帳號: $stuid)");
+      debugPrint("📡 [_loginViaSSO2] 發送 POST 請求至 $loginUri (帳號: $stuid)");
       final response = await _client.post(
         loginUri,
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
         body: {"stuid": stuid.toUpperCase(), "SPassword": encryptedPass},
       );
-      
-      print("📥 [_loginViaSSO2] 收到伺服器回應，狀態碼: ${response.statusCode}");
-      
+
+      debugPrint("📥 [_loginViaSSO2] 收到伺服器回應，狀態碼: ${response.statusCode}");
+
       String? rawCookie = response.headers['set-cookie'];
-      print("🍪 [_loginViaSSO2] 解析 Header 中的 Set-Cookie: $rawCookie");
-      
+      debugPrint("🍪 [_loginViaSSO2] 解析 Header 中的 Set-Cookie: $rawCookie");
+
       // 檢查是否包含帳密錯誤的關鍵字
       if (response.body.contains("不符")) {
-        print("❌ [_loginViaSSO2] 登入失敗：網頁提示帳號或密碼不符！");
+        debugPrint("❌ [_loginViaSSO2] 登入失敗：網頁提示帳號或密碼不符！");
         return null;
       }
-      
+
       if (rawCookie != null) {
-        print("✅ [_loginViaSSO2] 登入成功，順利取得 Cookie！");
+        debugPrint("✅ [_loginViaSSO2] 登入成功，順利取得 Cookie！");
         return rawCookie;
       } else {
-        print("⚠️ [_loginViaSSO2] 登入似乎沒有報錯，但 Header 中沒有回傳 Set-Cookie！");
+        debugPrint("⚠️ [_loginViaSSO2] 登入似乎沒有報錯，但 Header 中沒有回傳 Set-Cookie！");
       }
-    } catch (e) { 
-      print("❌ [_loginViaSSO2] 發生連線例外錯誤: $e"); 
+    } catch (e) {
+      debugPrint("❌ [_loginViaSSO2] 發生連線例外錯誤: $e");
     }
     return null;
   }
-  
+
   Future<void> _fetchAbnormalData() async {
-    
-      print("🚀 [_fetchAbnormalData] 開始抓取異常處理資料...");
+    debugPrint("🚀 [_fetchAbnormalData] 開始抓取異常處理資料...");
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    if (test) {
+      await Future.delayed(const Duration(seconds: 1));
+      List<ReasonOption> parsedReasons = [
+        ReasonOption("1", "雙主修/輔系/學程課程衝突"),
+        ReasonOption("2", "畢業年級必修課衝堂"),
+        ReasonOption("3", "加簽已滿，特殊專案處理"),
+      ];
+      List<AbnormalCourse> parsedCourses = [
+        AbnormalCourse(
+          id: "chk_crs_1",
+          actionName: "abn_SelClass_chk_crs_1",
+          reasonName: "abn_rsn_chk_crs_1",
+          status: "未選上(異常處理)",
+          courseNo: "MIS321",
+          courseName: "系統分析與設計 Systems Analysis and Design",
+          credits: "3",
+          teacher: "張大衛",
+        ),
+        AbnormalCourse(
+          id: "chk_crs_2",
+          actionName: "abn_SelClass_chk_crs_2",
+          reasonName: "abn_rsn_chk_crs_2",
+          status: "未選上(異常處理)",
+          courseNo: "CSE2311",
+          courseName: "演算法概論 Introduction to Algorithms",
+          credits: "3",
+          teacher: "李小華",
+        ),
+        AbnormalCourse(
+          id: "chk_crs_3",
+          actionName: "abn_SelClass_chk_crs_3",
+          reasonName: "abn_rsn_chk_crs_3",
+          status: "已選上",
+          courseNo: "GEN1001",
+          courseName: "現代中文大意 Modern Chinese Literature",
+          credits: "2",
+          teacher: "王大明",
+        ),
+        AbnormalCourse(
+          id: "chk_crs_4",
+          actionName: "abn_SelClass_chk_crs_4",
+          reasonName: "abn_rsn_chk_crs_4",
+          status: "已選上",
+          courseNo: "PE1002",
+          courseName: "體育：羽球 Physical Education: Badminton",
+          credits: "0",
+          teacher: "陳教練",
+        ),
+      ];
+
+      for (var course in parsedCourses) {
+        if (course.status.contains('未選上')) {
+          course.selectedAction = "加選";
+        } else {
+          course.selectedAction = "退選";
+        }
+      }
+
       setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-
-      try {
-        // 1. 讀取憑證
-        final prefs = await SharedPreferences.getInstance();
-        String studentId = (prefs.getString('username') ?? "").trim();
-        String password = (prefs.getString('password') ?? "").trim();
-
-        if (studentId.isEmpty || password.isEmpty) {
-          throw "未登入 (請先至設定頁面設定帳號)";
-        }
-
-        // 2. 取得 SSO Cookie
-        String? cookie = await _loginViaSSO2(studentId, password);
-        if (cookie == null) {
-          throw "SSO 登入失敗，請確認帳號密碼是否正確";
-        }
-
-        // 3. 請求異常處理頁面
-        final url = Uri.parse("$_baseUrl/menu4/query/abnormal_list.asp");
-        final response = await _client.get(url, headers: {
-          "Cookie": cookie,
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        });
-
-        // 使用 allowMalformed 避免 Big5 編碼異常導致崩潰
-        String htmlBody = utf8.decode(response.bodyBytes, allowMalformed: true);
-        
-        // --- 4. 解析原因選單 (Reason Options) ---
-        List<ReasonOption> parsedReasons = [];
-        // 考慮 select 標籤可能會有換行或屬性順序不同
-        RegExp reasonSelectRegex = RegExp(r'''<select[^>]+name=["\']?NEW_CRSNO_RSN1["\']?[^>]*>(.*?)</select>''', caseSensitive: false, dotAll: true);
-        Match? reasonMatch = reasonSelectRegex.firstMatch(htmlBody);
-        
-        if (reasonMatch != null) {
-          String optionsHtml = reasonMatch.group(1)!;
-          // 捕捉 value 和顯示文字，並處理引號可能不存在的情況
-          RegExp optionRegex = RegExp(r'''<option[^>]+value=["\']?([^"\'\s>]+)["\']?[^>]*>([^<]*)</option>''', caseSensitive: false);
-          for (Match m in optionRegex.allMatches(optionsHtml)) {
-            parsedReasons.add(ReasonOption(m.group(1)!, m.group(2)!.trim()));
-          }
-        }
         _reasons = parsedReasons;
+        _courses = parsedCourses;
+        _isLoading = false;
+      });
+      return;
+    }
 
-        // --- 5. 解析課程表格 (強效解析法) ---
-        List<AbnormalCourse> parsedCourses = [];
-      List<String> rows = htmlBody.split(RegExp(r'</tr\s*>', caseSensitive: false));
-      
+    try {
+      // 1. 讀取憑證
+      final prefs = await SharedPreferences.getInstance();
+      String studentId = (prefs.getString('username') ?? "").trim();
+      String password = (prefs.getString('password') ?? "").trim();
+
+      if (studentId.isEmpty || password.isEmpty) {
+        throw "未登入 (請先至設定頁面設定帳號)";
+      }
+
+      // 2. 取得 SSO Cookie
+      String? cookie = await _loginViaSSO2(studentId, password);
+      if (cookie == null) {
+        throw "SSO 登入失敗，請確認帳號密碼是否正確";
+      }
+
+      // 3. 請求異常處理頁面
+      final url = Uri.parse("$_baseUrl/menu4/query/abnormal_list.asp");
+      final response = await _client.get(
+        url,
+        headers: {
+          "Cookie": cookie,
+          "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      );
+
+      // 使用 allowMalformed 避免 Big5 編碼異常導致崩潰
+      String htmlBody = utf8.decode(response.bodyBytes, allowMalformed: true);
+
+      // --- 4. 解析原因選單 (Reason Options) ---
+      List<ReasonOption> parsedReasons = [];
+      // 考慮 select 標籤可能會有換行或屬性順序不同
+      RegExp reasonSelectRegex = RegExp(
+        r'''<select[^>]+name=["\']?NEW_CRSNO_RSN1["\']?[^>]*>(.*?)</select>''',
+        caseSensitive: false,
+        dotAll: true,
+      );
+      Match? reasonMatch = reasonSelectRegex.firstMatch(htmlBody);
+
+      if (reasonMatch != null) {
+        String optionsHtml = reasonMatch.group(1)!;
+        // 捕捉 value 和顯示文字，並處理引號可能不存在的情況
+        RegExp optionRegex = RegExp(
+          r'''<option[^>]+value=["\']?([^"\'\s>]+)["\']?[^>]*>([^<]*)</option>''',
+          caseSensitive: false,
+        );
+        for (Match m in optionRegex.allMatches(optionsHtml)) {
+          parsedReasons.add(ReasonOption(m.group(1)!, m.group(2)!.trim()));
+        }
+      }
+      _reasons = parsedReasons;
+
+      // --- 5. 解析課程表格 (強效解析法) ---
+      List<AbnormalCourse> parsedCourses = [];
+      List<String> rows = htmlBody.split(
+        RegExp(r'</tr\s*>', caseSensitive: false),
+      );
+
       for (String rowHtml in rows) {
-        if (rowHtml.contains(RegExp(r'''type=["\']?checkbox["\']?''', caseSensitive: false))) {
+        if (rowHtml.contains(
+          RegExp(r'''type=["\']?checkbox["\']?''', caseSensitive: false),
+        )) {
           // 提取 checkbox ID
-          String id = RegExp(r'''name=["\']?([^"\'\s>]+)["\']?''', caseSensitive: false).firstMatch(rowHtml)?.group(1) ?? "";
-          
+          String id =
+              RegExp(
+                r'''name=["\']?([^"\'\s>]+)["\']?''',
+                caseSensitive: false,
+              ).firstMatch(rowHtml)?.group(1) ??
+              "";
+
           // 提取該列中的選單名稱 (Action & Reason)
-          String actionName = RegExp(r'''name=["\']?(abn_SelClass_[^"\'\s>]+)["\']?''', caseSensitive: false).firstMatch(rowHtml)?.group(1) ?? "";
-          String reasonName = RegExp(r'''name=["\']?(abn_rsn_[^"\'\s>]+)["\']?''', caseSensitive: false).firstMatch(rowHtml)?.group(1) ?? "";
+          String actionName =
+              RegExp(
+                r'''name=["\']?(abn_SelClass_[^"\'\s>]+)["\']?''',
+                caseSensitive: false,
+              ).firstMatch(rowHtml)?.group(1) ??
+              "";
+          String reasonName =
+              RegExp(
+                r'''name=["\']?(abn_rsn_[^"\'\s>]+)["\']?''',
+                caseSensitive: false,
+              ).firstMatch(rowHtml)?.group(1) ??
+              "";
 
           List<String> tdTexts = [];
-          RegExp tdRegex = RegExp(r'<td[^>]*>(.*?)</td>', caseSensitive: false, dotAll: true);
+          RegExp tdRegex = RegExp(
+            r'<td[^>]*>(.*?)</td>',
+            caseSensitive: false,
+            dotAll: true,
+          );
           for (Match td in tdRegex.allMatches(rowHtml)) {
-            String cleanText = td.group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
+            String cleanText = td
+                .group(1)!
+                .replaceAll(RegExp(r'<[^>]*>'), '')
+                .replaceAll('&nbsp;', ' ')
+                .trim();
             tdTexts.add(cleanText);
           }
 
           if (id.isNotEmpty && tdTexts.length >= 7) {
-            parsedCourses.add(AbnormalCourse(
-              id: id,
-              actionName: actionName,
-              reasonName: reasonName,
-              status: tdTexts[2],
-              courseNo: tdTexts[3],
-              courseName: tdTexts[4],
-              credits: tdTexts[5],
-              teacher: tdTexts[6],
-            ));
+            parsedCourses.add(
+              AbnormalCourse(
+                id: id,
+                actionName: actionName,
+                reasonName: reasonName,
+                status: tdTexts[2],
+                courseNo: tdTexts[3],
+                courseName: tdTexts[4],
+                credits: tdTexts[5],
+                teacher: tdTexts[6],
+              ),
+            );
           }
         }
       }
@@ -223,40 +298,135 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
         }
       }
 
-        setState(() {
-          _courses = parsedCourses;
-          _isLoading = false;
-          if (_courses.isEmpty) {
-            _errorMessage = "登入成功，但目前沒有異常處理課程資料";
-          }
-        });
-
-      } catch (e) {
-        print("❌ [_fetchAbnormalData] 錯誤: $e");
-        setState(() {
-          _errorMessage = e.toString().replaceAll("Exception:", "").trim();
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _courses = parsedCourses;
+        _isLoading = false;
+        if (_courses.isEmpty) {
+          _errorMessage = "登入成功，但目前沒有異常處理課程資料";
+        }
+      });
+    } catch (e) {
+      debugPrint("❌ [_fetchAbnormalData] 錯誤: $e");
+      setState(() {
+        _errorMessage = e.toString().replaceAll("Exception:", "").trim();
+        _isLoading = false;
+      });
     }
-  
+  }
+
+  void _showNoticeDialog() {
+    final colorScheme = Theme.of(context).colorScheme;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: colorScheme.cardBackground,
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.amber[800] ?? Colors.amber,
+                size: 28,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "重要提醒",
+                style: TextStyle(
+                  color: colorScheme.primaryText,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            "此部分功能僅供產出「異常處理申請表」的 PDF 檔案以供下載列印，並非線上直接完成異常處理的登錄與辦理。請在生成 PDF 之後，務必按照學校規定的流程進行後續辦理。",
+            style: TextStyle(
+              color: colorScheme.bodyText,
+              fontSize: 15,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                "我知道了",
+                style: TextStyle(
+                  color: colorScheme.accentBlue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWarningBanner(ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.warningContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.4),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.amber[800] ?? Colors.amber,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "提示：此部分功能僅供生成 PDF 申請表，並非線上直接完成辦理，下載後仍須依學校規定流程送交辦理。",
+              style: TextStyle(
+                color: colorScheme.isDark
+                    ? const Color(0xFFFFCC80)
+                    : Colors.amber[900],
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ==========================================================
   // UI 區塊建構
   // ==========================================================
-@override
+  @override
   Widget build(BuildContext context) {
+    final bool isWide = MediaQuery.of(context).size.width >= 800;
+
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        // 1. 移除粗體
-        title: const Text('異常處理申請'), 
+        title: const Text('異常處理申請'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: colorScheme.cardBackground,
+        foregroundColor: colorScheme.primaryText,
         elevation: 0.5,
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: colorScheme.pageBackground,
       body: _buildBody(),
-      bottomNavigationBar: _isLoading || _errorMessage != null ? null : _buildSubmitButton(),
+      bottomNavigationBar: isWide || _isLoading || _errorMessage != null
+          ? null
+          : _buildSubmitButton(),
     );
   }
 
@@ -283,32 +453,69 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
             children: [
               const Icon(Icons.error_outline, size: 60, color: Colors.red),
               const SizedBox(height: 16),
-              Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _fetchAbnormalData,
                 child: const Text("重新嘗試"),
-              )
+              ),
             ],
           ),
         ),
       );
     }
 
-    // 1. 分類課程
-    // 假設 status 包含 "選上" 的屬於下方，其餘（如：未選上、人數已滿、衝堂）在上方
-    final pendingCourses = _courses.where((c) => c.status.contains('未選上') || !c.status.contains('選上')).toList();
-    final selectedCourses = _courses.where((c) => c.status.contains('選上') && !c.status.contains('未選上')).toList();
+    // 分類課程
+    final pendingCourses = _courses
+        .where((c) => c.status.contains('未選上') || !c.status.contains('選上'))
+        .toList();
+    final selectedCourses = _courses
+        .where((c) => c.status.contains('選上') && !c.status.contains('未選上'))
+        .toList();
 
+    final bool isWide = MediaQuery.of(context).size.width >= 800;
+    if (isWide) {
+      return _buildWideBody(pendingCourses, selectedCourses);
+    } else {
+      return _buildNarrowBody(pendingCourses, selectedCourses);
+    }
+  }
+
+  Widget _buildNarrowBody(
+    List<AbnormalCourse> pendingCourses,
+    List<AbnormalCourse> selectedCourses,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
+        _buildWarningBanner(colorScheme),
+        const SizedBox(height: 16),
         // --- 上方：未選上（異常處理）科目 ---
         if (pendingCourses.isNotEmpty) ...[
-          const Text("未選上科目", 
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 30, 184, 255))),
+          const Text(
+            "未選上科目",
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Color.fromARGB(255, 30, 184, 255),
+            ),
+          ),
           const SizedBox(height: 8),
-          ...pendingCourses.map((course) => _buildCourseCard(course)).toList(),
+          ...pendingCourses
+              .map(
+                (course) => AbnormalCourseCard(
+                  key: ValueKey(course.id),
+                  course: course,
+                  reasons: _reasons,
+                  onChanged: () => setState(() {}),
+                ),
+              )
+              .toList(),
         ],
 
         // --- 中間分割線：只有當兩者都有資料時才顯示 ---
@@ -321,18 +528,40 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
 
         // --- 下方：已選上科目 ---
         if (selectedCourses.isNotEmpty) ...[
-          const Text("已選上科目", 
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green)),
+          const Text(
+            "已選上科目",
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Colors.green,
+            ),
+          ),
           const SizedBox(height: 8),
-          ...selectedCourses.map((course) => _buildCourseCard(course)).toList(),
+          ...selectedCourses
+              .map(
+                (course) => AbnormalCourseCard(
+                  key: ValueKey(course.id),
+                  course: course,
+                  reasons: _reasons,
+                  onChanged: () => setState(() {}),
+                ),
+              )
+              .toList(),
         ],
 
-        // --- 原有的自填課程區塊 ---
+        // --- 自填課程區塊 ---
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("自填課程", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+            const Text(
+              "自填課程",
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey,
+              ),
+            ),
             if (_manualCourses.length < 2)
               TextButton.icon(
                 onPressed: _addNewManualCourse,
@@ -342,198 +571,350 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
           ],
         ),
         const SizedBox(height: 8),
-        ..._manualCourses.asMap().entries.map((entry) => _buildManualCourseCard(entry.key, entry.value)).toList(),
+        ..._manualCourses
+            .asMap()
+            .entries
+            .map(
+              (entry) => ManualCourseCard(
+                key: ObjectKey(entry.value),
+                index: entry.key,
+                manualCourse: entry.value,
+                reasons: _reasons,
+                isActive: _pickingManualCourse == entry.value,
+                onDelete: () {
+                  setState(() {
+                    _manualCourses.removeAt(entry.key);
+                  });
+                },
+                onPickCourseCode: () => _pickCourseCode(entry.value),
+                onChanged: () => setState(() {}),
+              ),
+            )
+            .toList(),
       ],
     );
   }
-  
-  void _addNewManualCourse() {
-    setState(() {
-      // 預設選項設定為 "加選"
-      _manualCourses.add(ManualCourse()..selectedAction = "加選");
-    });
-  }
-  /// 建立預設課程的卡片
-  Widget _buildCourseCard(AbnormalCourse course) {
-    // 處理課程名稱：只顯示 "-" 後面的部分
-    String displayName = course.courseName.contains('-') 
-        ? course.courseName.split('-').last.trim() 
-        : course.courseName;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: course.isSelected ? 3 : 1,
-      child: Column(
-        children: [
-          CheckboxListTile(
-            title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text("學分：${course.credits} | 教師：${course.teacher}"),
-            value: course.isSelected,
-            activeColor: Colors.blue, // 勾選後為藍色
-            onChanged: (val) {
-              setState(() {
-                course.isSelected = val ?? false;
-                if (!course.isSelected) {
-                  course.selectedAction = null;
-                  course.selectedReason = null;
-                }
-              });
-            },
+  Widget _buildWideBody(
+    List<AbnormalCourse> pendingCourses,
+    List<AbnormalCourse> selectedCourses,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 左半邊：55% 寬度，顯示預設課程列表或行內搜尋器
+        Expanded(
+          flex: 11,
+          child: Container(
+            color: colorScheme.pageBackground,
+            child: _pickingManualCourse != null
+                ? InlineCoursePicker(
+                    key: ObjectKey(_pickingManualCourse!),
+                    onBack: () {
+                      setState(() {
+                        _pickingManualCourse = null;
+                      });
+                    },
+                    onCourseSelected: (course) {
+                      setState(() {
+                        if (_pickingManualCourse != null) {
+                          _pickingManualCourse!.courseNo = course.id;
+                          _pickingManualCourse!.isExpanded = false;
+                          _pickingManualCourse = null;
+                        }
+                      });
+                    },
+                  )
+                : _buildWideDefaultCoursesList(pendingCourses, selectedCourses),
           ),
-          if (course.isSelected)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Column(
-                children: [
-                  _buildActionDropdown(
-                    value: course.selectedAction, 
-                    onChanged: (val) => setState(() => course.selectedAction = val)
-                  ),
-                  const SizedBox(height: 12),
-                  _buildReasonDropdown(
-                    value: course.selectedReason, 
-                    onChanged: (val) => setState(() => course.selectedReason = val)
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            )
-        ],
-      ),
+        ),
+        // 分割線
+        VerticalDivider(width: 1, color: colorScheme.borderColor),
+        // 右半邊：45% 寬度，顯示自填課程與送出面板
+        Expanded(
+          flex: 9,
+          child: Container(
+            color: colorScheme.pageBackground,
+            child: _buildWideManualPanel(),
+          ),
+        ),
+      ],
     );
   }
-  // 修改後的手動課程卡片
-  Widget _buildManualCourseCard(int index, ManualCourse manualCourse) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+
+  Widget _buildWideDefaultCoursesList(
+    List<AbnormalCourse> pendingCourses,
+    List<AbnormalCourse> selectedCourses,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(24.0),
+      children: [
+        Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("自填項目 ${index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                  onPressed: () => setState(() => _manualCourses.removeAt(index)),
-                )
-              ],
+            Icon(
+              Icons.assignment_late_outlined,
+              color: colorScheme.accentBlue,
+              size: 24,
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildActionDropdown(
-                    value: manualCourse.selectedAction,
-                    onChanged: (val) => setState(() => manualCourse.selectedAction = val)
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 5,
-                  child: InkWell(
-                    onTap: () => _pickCourseCode(manualCourse),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[400]!),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              manualCourse.courseNo.isEmpty ? "點擊選擇課號" : manualCourse.courseNo,
-                              style: TextStyle(color: manualCourse.courseNo.isEmpty ? Colors.grey : Colors.black87),
-                            ),
-                          ),
-                          const Icon(Icons.search, size: 18, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildReasonDropdown(
-              value: manualCourse.selectedReason,
-              onChanged: (val) => setState(() => manualCourse.selectedReason = val)
+            const SizedBox(width: 8),
+            Text(
+              "預設異常處理科目",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.primaryText,
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-  /// 加退選下拉選單共用元件
-  Widget _buildActionDropdown({required String? value, required ValueChanged<String?> onChanged}) {
-    return DropdownButtonFormField<String>(
-      decoration: const InputDecoration(
-        labelText: '加/退選',
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      ),
-      value: value,
-      items: const [
-        DropdownMenuItem(value: "加選", child: Text("加選")),
-        DropdownMenuItem(value: "退選", child: Text("退選")),
-      ],
-      onChanged: onChanged,
-    );
-  }
+        const SizedBox(height: 8),
+        Text(
+          "請在此處勾選並設定需要加選或退選的異常科目。系統會自動解析您目前在選課系統中的狀態。",
+          style: TextStyle(fontSize: 14, color: colorScheme.subtitleText),
+        ),
+        const SizedBox(height: 16),
+        _buildWarningBanner(colorScheme),
+        const SizedBox(height: 24),
 
-  /// 申請原因下拉選單共用元件
-  Widget _buildReasonDropdown({required String? value, required ValueChanged<String?> onChanged}) {
-    return DropdownButtonFormField<String>(
-      isExpanded: true, 
-      // 移除固定高度限制，讓內容決定高度
-      decoration: const InputDecoration(
-        labelText: '選擇原因',
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 15), // 增加垂直間距
-      ),
-      value: value,
-      items: _reasons.map((reason) {
-        // 移除 [ ] 及其中的內容
-        String cleanText = reason.text.replaceAll(RegExp(r'\【.*?\】'), '').trim();
-
-        return DropdownMenuItem(
-          value: reason.value,
-          // 使用 IntrinsicHeight 或直接讓 Text 換行
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              cleanText, 
-              style: const TextStyle(fontSize: 13), 
-              softWrap: true,
-              overflow: TextOverflow.visible, // 確保文字完整顯示並換行
+        // --- 未選上（異常處理）科目 ---
+        if (pendingCourses.isNotEmpty) ...[
+          Text(
+            "未選上科目",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.accentBlue,
             ),
           ),
-        );
-      }).toList(),
-      // 調整選單彈出時的樣式
-      selectedItemBuilder: (BuildContext context) {
-        return _reasons.map<Widget>((reason) {
-          String cleanText = reason.text.replaceAll(RegExp(r'\【.*?\】'), '').trim();
-          return Text(
-            cleanText,
-            style: const TextStyle(fontSize: 13),
-            overflow: TextOverflow.ellipsis, // 在收合狀態下保持單列
-          );
-        }).toList();
-      },
-      onChanged: onChanged,
+          const SizedBox(height: 12),
+          ...pendingCourses
+              .map(
+                (course) => AbnormalCourseCard(
+                  key: ValueKey(course.id),
+                  course: course,
+                  reasons: _reasons,
+                  onChanged: () => setState(() {}),
+                ),
+              )
+              .toList(),
+        ],
+
+        // --- 中間分割線 ---
+        if (pendingCourses.isNotEmpty && selectedCourses.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Divider(thickness: 1, color: colorScheme.borderColor),
+          ),
+        ],
+
+        // --- 已選上科目 ---
+        if (selectedCourses.isNotEmpty) ...[
+          const Text(
+            "已選上科目",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.green,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...selectedCourses
+              .map(
+                (course) => AbnormalCourseCard(
+                  key: ValueKey(course.id),
+                  course: course,
+                  reasons: _reasons,
+                  onChanged: () => setState(() {}),
+                ),
+              )
+              .toList(),
+        ],
+
+        if (pendingCourses.isEmpty && selectedCourses.isEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            alignment: Alignment.center,
+            child: Column(
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: colorScheme.iconColor,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "無預設課程資料",
+                  style: TextStyle(color: colorScheme.subtitleText),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
+  Widget _buildWideManualPanel() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(24.0),
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.edit_note_outlined,
+                        color: colorScheme.accentBlue,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "自填課程",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.primaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_manualCourses.length < 2)
+                    ElevatedButton.icon(
+                      onPressed: _addNewManualCourse,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text("新增自填"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "若名單中沒有您想加退選的科目，請使用自填項目手動新增。至多可填寫 2 筆項目。",
+                style: TextStyle(fontSize: 14, color: colorScheme.subtitleText),
+              ),
+              const SizedBox(height: 24),
+
+              if (_manualCourses.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 48),
+                  decoration: BoxDecoration(
+                    color: colorScheme.subtleBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colorScheme.borderColor),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        size: 40,
+                        color: colorScheme.iconColor,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "尚無自填項目",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.primaryText,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "點擊右上方按鈕新增自填課程",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.subtitleText,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ..._manualCourses
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => ManualCourseCard(
+                        key: ObjectKey(entry.value),
+                        index: entry.key,
+                        manualCourse: entry.value,
+                        reasons: _reasons,
+                        isActive: _pickingManualCourse == entry.value,
+                        onDelete: () {
+                          setState(() {
+                            if (_pickingManualCourse == entry.value) {
+                              _pickingManualCourse = null;
+                            }
+                            _manualCourses.removeAt(entry.key);
+                          });
+                        },
+                        onPickCourseCode: () => _pickCourseCode(entry.value),
+                        onChanged: () => setState(() {}),
+                      ),
+                    )
+                    .toList(),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: colorScheme.borderColor),
+        Container(
+          padding: const EdgeInsets.all(24.0),
+          color: colorScheme.cardBackground,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueGrey[800],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: _handleSubmit,
+                child: const Text(
+                  "確認並獲取PDF",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _addNewManualCourse() {
+    setState(() {
+      _manualCourses.add(ManualCourse()..selectedAction = "加選");
+    });
+  }
 
   Future<void> _pickCourseCode(ManualCourse manual) async {
-    // 跳轉到剛剛建立的挑選頁面
+    final bool isWide = MediaQuery.of(context).size.width >= 800;
+    if (isWide) {
+      setState(() {
+        _pickingManualCourse = manual;
+        manual.isExpanded = true;
+      });
+      return;
+    }
+
     final String? pickedCode = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CourseSearchPickerPage()),
@@ -555,14 +936,20 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
             backgroundColor: Colors.blueGrey[800], // 改為深藍灰色
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           onPressed: _handleSubmit,
-          child: const Text("確認並送出申請", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          child: const Text(
+            "確認並送出申請",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
     );
   }
+
   // ==========================================================
   // 送出邏輯
   // ==========================================================
@@ -576,7 +963,7 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
       return;
     }
 
-    // 1. 準備表單資料 (此處邏輯不變，保持原本的 formData 組合)
+    // 1. 準備表單資料
     Map<String, String> formData = {};
     // 處理已勾選的課程
     for (var course in _courses) {
@@ -591,26 +978,22 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
       }
     }
 
-    // 處理自填課程 (固定 1 & 2 兩組)
     // 處理自填課程 (安全地處理動態長度)
     for (int i = 0; i < 2; i++) {
       int suffix = i + 1; // 網頁表單對應的編號 (1 或 2)
-      
-      // 檢查目前的索引是否存在於 _manualCourses 中
+
       if (i < _manualCourses.length) {
-        var m = _manualCourses[i]; // 現在這裡安全了，不會報 RangeError
-        
-        // 檢查是否有選課號 (非必填可移除此判斷)
+        var m = _manualCourses[i];
+
         if (m.courseNo.isEmpty) {
           _showSnackBar("請選擇自填項目 $suffix 的課號");
-          return; 
+          return;
         }
 
         formData["SEL_STATUS$suffix"] = m.selectedAction ?? "";
         formData["NEW_CRSNO$suffix"] = m.courseNo.trim();
         formData["NEW_CRSNO_RSN$suffix"] = m.selectedReason ?? "";
       } else {
-        // 如果清單中沒有這筆，則傳送空字串給伺服器，確保表單結構完整
         formData["SEL_STATUS$suffix"] = "";
         formData["NEW_CRSNO$suffix"] = "";
         formData["NEW_CRSNO_RSN$suffix"] = "";
@@ -629,9 +1012,8 @@ class _CourseExceptionHandlingPageState extends State<CourseExceptionHandlingPag
         ),
       ),
     );
-  } 
-    
-  
+  }
+
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red[600]),
