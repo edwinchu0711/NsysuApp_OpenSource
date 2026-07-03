@@ -1,6 +1,11 @@
 import 'dart:convert';
+<<<<<<< HEAD
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+=======
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:html/parser.dart' show parse;
 // 假設這是你存放 base64md5 的地方
@@ -67,47 +72,76 @@ class GraduationService {
     String password,
   ) async {
     // debugPrint("🌐 開始連線教務處取得畢業檢核...");
+<<<<<<< HEAD
+    final http.Client client = http.Client();
+=======
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 15),
         responseType: ResponseType.plain,
       ),
     );
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
     try {
       // Step A: SSO 登入
       final String base64md5Password = Utils.base64md5(password);
 
+<<<<<<< HEAD
+      final http.Request loginRequest = http.Request(
+        'POST',
+        Uri.parse('https://selcrs.nsysu.edu.tw/gadchk/gad_chk_login_prs_sso2.asp'),
+      )
+        ..followRedirects = false
+        ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+        ..bodyFields = <String, String>{
+=======
       final loginResponse = await dio.post(
         'https://selcrs.nsysu.edu.tw/gadchk/gad_chk_login_prs_sso2.asp',
         data: {
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
           'SID': username.toUpperCase(),
           'PASSWD': base64md5Password,
           'ACTION': '0',
           'INTYPE': '1',
-        },
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          // 👇 關鍵修改：禁止自動跳轉，並允許 302 狀態碼
-          followRedirects: false,
-          validateStatus: (status) {
-            return status != null && status < 500; // 只要小於 500 (包含 302) 都視為成功
-          },
-        ),
+        };
+
+      final http.Response loginResponse = await http.Response.fromStream(
+        await client.send(loginRequest).timeout(const Duration(seconds: 15)),
       );
 
       // 取得 Cookies (通常在 302 回應的 Header 中)
+<<<<<<< HEAD
+      String? cookies = loginResponse.headers['set-cookie'];
+=======
       List<String>? cookies = loginResponse.headers['set-cookie'];
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
       // 補充判斷：有時候成功會直接回傳 302，有時候是 200，只要拿到 Cookie 就算成功
       if (cookies == null || cookies.isEmpty) {
         throw Exception("登入失敗：無法取得 Session (請檢查帳號密碼)");
       }
-      String cookieString = cookies.map((s) => s.split(';').first).join('; ');
+      String cookieString = cookies.split(';').first;
 
       // Step B: 抓取檢核表 HTML
-      final dataResponse = await dio.get(
+      final Uri dataUrl = Uri.parse(
         'https://selcrs.nsysu.edu.tw/gadchk/gad_chk_stu_list.asp',
+<<<<<<< HEAD
+      ).replace(queryParameters: <String, String>{
+        'stno': username,
+        'KIND': '5',
+        'frm': '1',
+      });
+      final http.Response dataResponse = await client.get(
+        dataUrl,
+        headers: <String, String>{'Cookie': cookieString},
+      );
+
+      // Step C: 解析 HTML
+      // 學校伺服器 Content-Type 不帶 charset，http 預設 latin1 解碼會讓中文亂碼，
+      // 改用 bodyBytes + utf8 解碼（與專案其他 service 一致）。
+      String htmlContent = utf8.decode(dataResponse.bodyBytes, allowMalformed: true);
+=======
         queryParameters: {'stno': username, 'KIND': '5', 'frm': '1'},
         options: Options(
           headers: {'Cookie': cookieString},
@@ -117,6 +151,7 @@ class GraduationService {
 
       // Step C: 解析 HTML
       String htmlContent = dataResponse.data.toString();
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
       // 簡單檢查是否被導回登入頁 (如果 Cookie 無效，學校系統通常會回傳登入畫面)
       if (htmlContent.contains("請輸入學號及密碼")) {
@@ -134,6 +169,8 @@ class GraduationService {
     } catch (e) {
       debugPrint("❌ 畢業檢核抓取錯誤: $e");
       rethrow;
+    } finally {
+      client.close();
     }
   }
 

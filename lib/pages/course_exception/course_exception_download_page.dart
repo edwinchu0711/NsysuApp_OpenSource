@@ -1,11 +1,15 @@
 // course_exception_download_page.dart
 
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
+import 'package:open_filex/open_filex.dart';
+import '../../theme/app_theme.dart';
+import '../../services/course_exception_service.dart';
+=======
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../utils/utils.dart';
 import '../../theme/app_theme.dart';
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
 class AbnormalWebViewPage extends StatefulWidget {
   final Map<String, String> postData;
@@ -24,17 +28,55 @@ class AbnormalWebViewPage extends StatefulWidget {
 }
 
 class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
+<<<<<<< HEAD
+=======
   InAppWebViewController? webViewController;
   int _processStep = 0;
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
   bool _isLoading = true;
   String _statusMessage = "正在連線系統...";
+  String? _localHtmlPath;
 
+<<<<<<< HEAD
+  @override
+  void initState() {
+    super.initState();
+    _startProcess();
+  }
+
+  Future<void> _startProcess() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _statusMessage = "正在登入並送出申請表單...";
+      });
+
+      final path = await CourseExceptionService.submitException(
+        stuid: widget.stuid,
+        password: widget.password,
+        postData: widget.postData,
+      );
+
+      setState(() {
+        _isLoading = false;
+        _localHtmlPath = path;
+        _statusMessage = "申請已成功送出！";
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = "處理失敗：${e.toString().replaceFirst('Exception: ', '')}";
+      });
+    }
+  }
+=======
   final String loginUrl =
       "https://selcrs.nsysu.edu.tw/menu4/Studcheck_sso2.asp";
   final String mainFrameUrl =
       "https://selcrs.nsysu.edu.tw/menu4/main_frame.asp";
   final String submitUrl =
       "https://selcrs.nsysu.edu.tw/menu4/query/abnormal.asp";
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +88,8 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
         backgroundColor: colorScheme.cardBackground,
         foregroundColor: colorScheme.primaryText,
         elevation: 0.5,
+<<<<<<< HEAD
+=======
       ),
       backgroundColor: colorScheme.pageBackground,
       body: Stack(
@@ -122,10 +166,15 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
           ),
           _buildOverlayUI(),
         ],
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       ),
+      backgroundColor: colorScheme.pageBackground,
+      body: _buildOverlayUI(),
     );
   }
 
+<<<<<<< HEAD
+=======
   Future<void> _performPostSubmit(InAppWebViewController controller) async {
     String postFields = widget.postData.entries
         .map(
@@ -160,6 +209,7 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
     });
   }
 
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
   Widget _buildOverlayUI() {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -179,6 +229,8 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
                 fontWeight: FontWeight.w500,
               ),
             ),
+<<<<<<< HEAD
+=======
             const SizedBox(height: 10),
             // 加入強制跳轉按鈕，以防自動判定失效
             TextButton(
@@ -188,6 +240,7 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
                 style: TextStyle(color: colorScheme.subtitleText),
               ),
             ),
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
           ] else ...[
             Icon(
               _statusMessage.contains("失敗")
@@ -197,6 +250,36 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
               size: 80,
             ),
             const SizedBox(height: 16),
+<<<<<<< HEAD
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                _statusMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primaryText,
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+            if (!_statusMessage.contains("失敗") && _localHtmlPath != null)
+              ElevatedButton.icon(
+                onPressed: () => OpenFilex.open(_localHtmlPath!),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text("檢視收執聯或列印/下載PDF"),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(220, 50),
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+=======
             Text(
               _statusMessage,
               style: TextStyle(
@@ -221,6 +304,7 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
                   elevation: 0,
                 ),
               ),
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -231,6 +315,8 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
       ),
     );
   }
+<<<<<<< HEAD
+=======
 
   // 強制執行下一步的保險手段
   void _forceSubmit() {
@@ -246,4 +332,5 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
       }
     }
   }
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 }

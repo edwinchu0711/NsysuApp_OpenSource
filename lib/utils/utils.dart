@@ -1,7 +1,12 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+<<<<<<< HEAD
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+=======
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
 class Utils {
   static bool isDev(String username) {
@@ -31,6 +36,17 @@ class Utils {
       return;
     }
     try {
+<<<<<<< HEAD
+      final response = await http
+          .post(
+            Uri.parse('https://quiet-scene-52f9.jawei-hsu2005.workers.dev'),
+            body: {'platform': defaultTargetPlatform.name}, // 帶入平台資訊
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        debugPrint('記錄成功：${response.body}');
+=======
       final dio = Dio(BaseOptions(connectTimeout: Duration(seconds: 10)));
       final response = await dio.post(
         'https://quiet-scene-52f9.jawei-hsu2005.workers.dev',
@@ -39,6 +55,7 @@ class Utils {
 
       if (response.statusCode == 200) {
         debugPrint('記錄成功：${response.data}');
+>>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       } else {
         debugPrint('失敗：${response.statusCode}');
       }
