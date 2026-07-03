@@ -1,11 +1,6 @@
-<<<<<<< HEAD
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-=======
-import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 import '../models/bus_info.dart';
 import '../models/bus_time.dart';
 
@@ -17,16 +12,11 @@ class BusService {
   static BusService? _instance;
   static BusService get instance => _instance ??= BusService._();
 
-<<<<<<< HEAD
   final http.Client _client = http.Client();
-=======
-  final Dio _dio = Dio();
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
   BusService._();
 
   Future<List<BusInfo>> fetchBusInfoList(Locale locale) async {
-<<<<<<< HEAD
     final String languageCode = locale.languageCode.contains('zh')
         ? 'zh'
         : 'en';
@@ -43,30 +33,11 @@ class BusService {
       }
       throw Exception('Empty response');
     } on http.ClientException catch (e) {
-=======
-    final String languageCode =
-        locale.languageCode.contains('zh') ? 'zh' : 'en';
-    final String url =
-        '$_infoBaseUrl/bus_info_data_$languageCode.json';
-
-    try {
-      final Response<String> response = await _dio.get<String>(
-        url,
-        options: Options(responseType: ResponseType.plain),
-      );
-      if (response.data != null) {
-        final List<BusInfo>? list = BusInfo.fromRawList(response.data!);
-        return list ?? [];
-      }
-      throw Exception('Empty response');
-    } on DioException catch (e) {
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       throw Exception('Failed to fetch bus info: ${e.message}');
     }
   }
 
   Future<List<BusTime>> fetchBusTime(BusInfo busInfo, Locale locale) async {
-<<<<<<< HEAD
     final String languageCode = locale.languageCode.contains('zh')
         ? 'zh'
         : 'en';
@@ -91,27 +62,6 @@ class BusService {
       }
       throw Exception('Empty response');
     } on http.ClientException catch (e) {
-=======
-    final String languageCode =
-        locale.languageCode.contains('zh') ? 'zh' : 'en';
-
-    try {
-      final Response<String> response = await _dio.post<String>(
-        '$_basePath/API/RoutePathStop.aspx?${DateTime.now().millisecondsSinceEpoch}',
-        options: Options(responseType: ResponseType.plain),
-        data: FormData.fromMap(<String, dynamic>{
-          'RID': busInfo.routeId,
-          'C': languageCode,
-          'CID': busInfo.carId,
-        }),
-      );
-      if (response.data != null) {
-        final List<BusTime>? list = BusTime.fromRawList(response.data!);
-        return list ?? [];
-      }
-      throw Exception('Empty response');
-    } on DioException catch (e) {
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       throw Exception('Failed to fetch bus time: ${e.message}');
     }
   }

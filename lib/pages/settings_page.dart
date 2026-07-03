@@ -507,10 +507,7 @@ class FeatureSettingsPage extends StatefulWidget {
 
 class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
   int _previewRankMode = 2; // 1: 關閉, 2: 部分期間開啟, 3: 永久開啟
-<<<<<<< HEAD
   bool _experimentalAbnormalEnabled = false;
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
   @override
   void initState() {
@@ -533,11 +530,8 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
       } else {
         _previewRankMode = 2;
       }
-<<<<<<< HEAD
       _experimentalAbnormalEnabled =
           prefs.getBool('experimental_abnormal_handling_enabled') ?? false;
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
     });
   }
 
@@ -548,15 +542,12 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
     await prefs.setBool('is_preview_rank_enabled', value != 1);
   }
 
-<<<<<<< HEAD
   Future<void> _updateExperimentalAbnormal(bool value) async {
     setState(() => _experimentalAbnormalEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('experimental_abnormal_handling_enabled', value);
   }
 
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -588,7 +579,6 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
                 color: colorScheme.accentBlue,
               ),
             ),
-<<<<<<< HEAD
           ),
           _buildRadioOption(
             title: "關閉預覽",
@@ -663,39 +653,6 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
               horizontal: 20,
               vertical: 8,
             ),
-=======
-          ),
-          _buildRadioOption(
-            title: "關閉預覽",
-            subtitle: "完全關閉預覽功能，查詢速度最快",
-            value: 1,
-            colorScheme: colorScheme,
-          ),
-          Divider(
-            height: 1,
-            indent: 20,
-            endIndent: 20,
-            color: colorScheme.borderColor,
-          ),
-          _buildRadioOption(
-            title: "部分期間開啟 (推薦)",
-            subtitle:
-                "僅在「成績開放查詢期間」開啟預覽以節省系統資源 (春夏季 5/25 ~ 10/10，秋冬季 12/25 ~ 3/20 開啟，其餘時間關閉)",
-            value: 2,
-            colorScheme: colorScheme,
-          ),
-          Divider(
-            height: 1,
-            indent: 20,
-            endIndent: 20,
-            color: colorScheme.borderColor,
-          ),
-          _buildRadioOption(
-            title: "永久開啟 (不建議)",
-            subtitle: "全年無休嘗試抓取名次預覽，但可能導致非期末期間查詢時間顯著變長",
-            value: 3,
-            colorScheme: colorScheme,
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
           ),
           const Divider(),
         ],
@@ -1163,7 +1120,6 @@ class _OrientationSettingsPageState extends State<OrientationSettingsPage> {
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
         children: [
-<<<<<<< HEAD
           ListTile(
             title: Text(
               "允許橫向旋轉",
@@ -1188,14 +1144,7 @@ class _OrientationSettingsPageState extends State<OrientationSettingsPage> {
                 onChanged: _toggleLandscape,
               ),
             ),
-=======
-          SwitchListTile(
-            title: const Text("允許橫向旋轉"),
-            subtitle: const Text("開啟後，旋轉時畫面可同步切換為橫向顯示"),
-            value: _allowLandscape,
-            onChanged: _toggleLandscape,
-            activeColor: colorScheme.accentBlue,
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
+
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 20,
               vertical: 8,

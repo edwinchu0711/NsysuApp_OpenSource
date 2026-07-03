@@ -76,10 +76,8 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
               ),
               const SizedBox(height: 4),
               Row(
-<<<<<<< HEAD
                 crossAxisAlignment: CrossAxisAlignment.end,
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
+
                 children: [
                   Expanded(
                     flex: 3,
@@ -99,16 +97,8 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                     child: InkWell(
                       onTap: widget.onPickCourseCode,
                       child: Container(
-<<<<<<< HEAD
                         height: 42,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-=======
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey[400]!),
                           borderRadius: BorderRadius.circular(4),
@@ -168,8 +158,8 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
           color: isActive
               ? colorScheme.primary
               : (manualCourse.courseNo.isNotEmpty
-                  ? colorScheme.borderColor
-                  : Colors.orange.shade300),
+                    ? colorScheme.borderColor
+                    : Colors.orange.shade300),
           width: isActive ? 2.0 : 1.0,
         ),
         borderRadius: BorderRadius.circular(12),
@@ -272,10 +262,8 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-<<<<<<< HEAD
                       crossAxisAlignment: CrossAxisAlignment.end,
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
+
                       children: [
                         Expanded(
                           flex: 3,
@@ -295,15 +283,9 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                           child: InkWell(
                             onTap: widget.onPickCourseCode,
                             child: Container(
-<<<<<<< HEAD
                               height: 42,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
-=======
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
                               ),
                               decoration: BoxDecoration(
                                 color: isActive
@@ -332,8 +314,8 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                                             : colorScheme.primaryText,
                                         fontWeight:
                                             manualCourse.courseNo.isEmpty
-                                                ? FontWeight.normal
-                                                : FontWeight.bold,
+                                            ? FontWeight.normal
+                                            : FontWeight.bold,
                                       ),
                                     ),
                                   ),

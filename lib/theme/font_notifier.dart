@@ -20,14 +20,11 @@ class FontNotifier extends ValueNotifier<String> {
           debugPrint('FontNotifier: init preloading error: $e');
         });
         return;
-<<<<<<< HEAD
       } else {
         // 若啟動時設定為預設字體，異步嘗試清理殘留的字體快取（此時新進程啟動，舊鎖定已被釋放）
         FontService.instance.deleteFontCache().catchError((e) {
           debugPrint('FontNotifier: init deleting font cache error: $e');
         });
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       }
     } catch (e) {
       debugPrint('FontNotifier: Initialize error: $e');

@@ -154,56 +154,27 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
         _handleLoginError("帳號或密碼錯誤");
         return;
       }
-<<<<<<< HEAD
       final http.Client client = http.Client();
-=======
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: Duration(seconds: 10),
-          followRedirects: false,
-          validateStatus: (status) => status! < 500,
-        ),
-      );
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
       try {
         final String base64md5Password = Utils.base64md5(password);
-
-<<<<<<< HEAD
-        final http.Request request = http.Request(
-          'POST',
-          Uri.parse('https://selcrs.nsysu.edu.tw/menu4/Studcheck_sso2.asp'),
-        )
-          ..followRedirects = false
-          ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
-          ..bodyFields = <String, String>{
-            'stuid': username.toUpperCase(),
-            'SPassword': base64md5Password,
-          };
+        final http.Request request =
+            http.Request(
+                'POST',
+                Uri.parse(
+                  'https://selcrs.nsysu.edu.tw/menu4/Studcheck_sso2.asp',
+                ),
+              )
+              ..followRedirects = false
+              ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+              ..bodyFields = <String, String>{
+                'stuid': username.toUpperCase(),
+                'SPassword': base64md5Password,
+              };
 
         final http.Response response = await http.Response.fromStream(
           await client.send(request).timeout(const Duration(seconds: 10)),
         );
-=======
-      final response = await dio.post(
-        'https://selcrs.nsysu.edu.tw/menu4/Studcheck_sso2.asp',
-        data: {'stuid': username.toUpperCase(), 'SPassword': base64md5Password},
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          responseType: ResponseType.plain,
-        ),
-      );
-
-      String bodyText = response.data.toString();
-      // debugPrint("bodyText: $bodyText");
-      List<String>? cookies = response.headers['set-cookie'];
-
-      bool isFailureMessage =
-          bodyText.contains("錯誤") || bodyText.contains("請重新輸入");
-      // debugPrint("bodyText: $bodyText");
-      if (cookies != null && cookies.isNotEmpty && !isFailureMessage) {
-        String cookieString = cookies.map((s) => s.split(';').first).join('; ');
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
         // 注意：學校伺服器的 Content-Type 不帶 charset，http 預設以 latin1 解碼會造成中文亂碼，
         // 導致「錯誤」等失敗訊息比對失敗（密碼錯誤卻判定登入成功）。改用 bodyBytes + utf8 解碼。
@@ -226,20 +197,11 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
           } else {
             _handleLoginError("帳號或密碼錯誤");
           }
-<<<<<<< HEAD
         } else {
           _handleLoginError("帳號或密碼錯誤");
         }
       } finally {
         client.close();
-=======
-          _onLoginSuccess(cookieString);
-        } else {
-          _handleLoginError("帳號或密碼錯誤");
-        }
-      } else {
-        _handleLoginError("帳號或密碼錯誤");
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       }
     } catch (e) {
       setState(() {

@@ -39,7 +39,6 @@ class AppCacheManager {
       final directory = await getTemporaryDirectory();
 
       if (await directory.exists()) {
-<<<<<<< HEAD
         // 遞迴刪除檔案
         await for (var entity in directory.list(
           recursive: true,
@@ -65,17 +64,7 @@ class AppCacheManager {
             }
           } catch (_) {}
         }
-=======
-        // 列出所有檔案並刪除
-        await for (var entity in directory.list(
-          recursive: false,
-          followLinks: false,
-        )) {
-          if (entity is File) {
-            await entity.delete();
-          }
-        }
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
+
         debugPrint("快取清理完成");
       }
     } catch (e) {

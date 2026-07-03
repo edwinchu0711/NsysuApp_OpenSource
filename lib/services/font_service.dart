@@ -25,14 +25,10 @@ class FontService {
       final supportDir = await getApplicationSupportDirectory();
       final googleFontsDir = Directory('${supportDir.path}/google_fonts');
       if (await googleFontsDir.exists()) {
-<<<<<<< HEAD
         final List<FileSystemEntity> entities = await googleFontsDir
             .list(recursive: true)
             .toList();
-=======
-        final List<FileSystemEntity> entities =
-            await googleFontsDir.list(recursive: true).toList();
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
+
         for (var entity in entities) {
           if (entity is File &&
               (entity.path.endsWith('.ttf') || entity.path.endsWith('.otf'))) {
@@ -52,7 +48,6 @@ class FontService {
       final supportDir = await getApplicationSupportDirectory();
       final googleFontsDir = Directory('${supportDir.path}/google_fonts');
       if (await googleFontsDir.exists()) {
-<<<<<<< HEAD
         try {
           await googleFontsDir.delete(recursive: true);
         } catch (e) {
@@ -68,10 +63,6 @@ class FontService {
         debugPrint(
           'FontService: Successfully deleted google_fonts cache directory.',
         );
-=======
-        await googleFontsDir.delete(recursive: true);
-        debugPrint('FontService: Successfully deleted google_fonts cache directory.');
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       }
     } catch (e) {
       debugPrint('FontService: Failed to delete google_fonts cache: $e');

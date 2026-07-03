@@ -44,10 +44,7 @@ class _CourseSelectionSchedulePageState
   bool _isCheckingSystem = true; // 是否正在連線檢查
   bool _isSystemOpen = false; // 系統是否實際開放
   String _systemStatusMessage = "檢查系統狀態中...";
-<<<<<<< HEAD
   bool _experimentalAbnormalEnabled = false;
-=======
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
 
   // --- 連線設定 ---
   final http.Client _client = http.Client();
@@ -1127,13 +1124,9 @@ class _CourseSelectionSchedulePageState
                                 ),
                               ),
                               const Divider(height: 1),
-<<<<<<< HEAD
                               ..._bottomList.map(
                                 (entry) => _buildCleanRow(entry),
                               ),
-=======
-                              ..._bottomList.map((entry) => _buildCleanRow(entry)),
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
                             ],
                           ),
                         ),
@@ -1345,8 +1338,6 @@ class _CourseSelectionSchedulePageState
               ],
             ),
           ),
-
-<<<<<<< HEAD
           if (_experimentalAbnormalEnabled) ...[
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
@@ -1430,91 +1421,8 @@ class _CourseSelectionSchedulePageState
                   ),
                 ],
               ),
-=======
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: Divider(height: 1),
-          ),
-
-          // 第二區塊：異常處理與操作
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 12.0,
             ),
-            child: Row(
-              children: [
-                Icon(exceptionIcon, color: exceptionTextColor, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        isExceptionActive ? "目前為異常處理階段" : "非異常處理時段",
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: exceptionTextColor,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        isExceptionActive ? "請儘速提出申請" : "功能暫未開放",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colorScheme.subtitleText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton(
-                    onPressed: isExceptionActive
-                        ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const CourseExceptionHandlingPage(),
-                              ),
-                            );
-                          }
-                        : null,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: isExceptionActive
-                          ? exceptionTextColor
-                          : colorScheme.subtitleText,
-                      side: BorderSide(
-                        color: isExceptionActive
-                            ? exceptionTextColor
-                            : colorScheme.borderColor,
-                        width: 1,
-                      ),
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      disabledForegroundColor: colorScheme.subtitleText
-                          .withOpacity(0.5),
-                    ),
-                    child: const Text(
-                      "異常處理",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -1602,7 +1510,6 @@ class _CourseSelectionSchedulePageState
         ),
 
         // --- 第二部分：異常處理列 (融入列表) ---
-<<<<<<< HEAD
         if (_experimentalAbnormalEnabled)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
@@ -1653,55 +1560,6 @@ class _CourseSelectionSchedulePageState
               ],
             ),
           ),
-=======
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-          decoration: BoxDecoration(
-            color: colorScheme.cardBackground,
-            border: Border(bottom: BorderSide(color: colorScheme.borderColor)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  isExceptionActive ? "目前為異常處理階段" : "非異常處理時段",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: isExceptionActive
-                        ? FontWeight.bold
-                        : FontWeight.w600,
-                    color: isExceptionActive
-                        ? (colorScheme.isDark
-                              ? Colors.green[300]
-                              : Colors.green[800])
-                        : colorScheme.subtitleText,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              _buildActionButton(
-                "前往異常處理",
-                isExceptionActive
-                    ? (colorScheme.isDark
-                          ? Colors.green[700]!
-                          : Colors.green[600]!)
-                    : Colors.transparent,
-                isExceptionActive
-                    ? () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const CourseExceptionHandlingPage(),
-                          ),
-                        );
-                      }
-                    : null,
-              ),
-            ],
-          ),
-        ),
->>>>>>> cb0e69536426ceb2a943a1d70f3df893136211d7
       ],
     );
   }
