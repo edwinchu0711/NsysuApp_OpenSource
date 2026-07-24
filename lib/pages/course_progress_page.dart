@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
 import '../models/program_model.dart';
-import '../services/ai_personalization_service.dart';
+import '../services/course_history_sync_service.dart';
 import '../services/department_service.dart';
 import '../services/eligibility_checker.dart';
 import '../services/offline_error_handler.dart';
@@ -32,7 +32,7 @@ class CourseProgressPage extends StatefulWidget {
 class _CourseProgressPageState extends State<CourseProgressPage> {
   final _programService = ProgramService.instance;
   final _deptService = DepartmentService.instance;
-  final _courseService = AiPersonalizationService.instance;
+  final _courseService = CourseHistorySyncService.instance;
 
   // Profile fields (committed values -- only updated on save)
   String _selectedDept = '';
@@ -107,158 +107,163 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
 
   Future<void> _loadData() async {
     try {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _loadError = null;
-      });
-    }
-
-    // 1. 立即從本機快取讀取基本個人學科資料（小於幾毫秒），以利瞬間渲染最上方欄位，避免 UI 卡頓感受
-    try {
-      final savedDept = await StorageService.instance.read(
-        'progress_selected_dept',
-      );
-      final savedDoubleMajor = await StorageService.instance.read(
-        'progress_double_major',
-      );
-      final savedMinor = await StorageService.instance.read('progress_minor');
       if (mounted) {
         setState(() {
-          _selectedDept = savedDept ?? '';
-          _doubleMajor = savedDoubleMajor ?? '';
-          _minor = savedMinor ?? '';
-          _isProfileExpanded = _selectedDept.isEmpty;
+          _isLoading = true;
+          _loadError = null;
         });
       }
-    } catch (e) {
-      debugPrint('Error loading initial profile info: $e');
-    }
 
-    // 2. 延遲載入以確保首頁 Bento 轉場動畫流暢播放完畢，避免阻塞 UI 線程
-    await Future.delayed(const Duration(milliseconds: 400));
-
-    await Future.wait([
-      _programService.loadFromCache(),
-      _deptService.loadFromCache(),
-      _courseService.loadFromCache(),
-      ProgramApplicationService.instance.loadFromCache(),
-    ]);
-
-    // 離線模式：跳過 network fetch，只用快取
-    if (!OfflineModeService.instance.isOffline) {
-      // 如果修課資料快取為空，或者與歷年成績快取有落差，則自動執行同步
-      final bool needsSync = await _courseService.checkIfSyncNeeded();
-      if (_courseService.resultsNotifier.value.isEmpty || needsSync) {
-        _courseService.fetchCourseHistory();
-      }
-    }
-
-    await _loadFavorites();
-
-    final savedProgramId = await StorageService.instance.read(
-      'progress_last_program_id',
-    );
-    final savedYearStr = await StorageService.instance.read(
-      'progress_last_year',
-    );
-    final savedYear = savedYearStr != null ? int.tryParse(savedYearStr) : null;
-
-    // 如果快取有資料，先結束 loading 讓使用者看到內容
-    final hasCachedPrograms = _programService.programsNotifier.value.isNotEmpty;
-    final hasCachedDepts = _deptService.departmentsNotifier.value.isNotEmpty;
-    if (hasCachedPrograms && hasCachedDepts) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-
-    // 從網路取得最新資料（進入頁面且記憶體無資料時自動下載）
-    if (!OfflineModeService.instance.isOffline) {
+      // 1. 立即從本機快取讀取基本個人學科資料（小於幾毫秒），以利瞬間渲染最上方欄位，避免 UI 卡頓感受
       try {
-        if (!hasCachedPrograms) {
-          await _programService.fetchPrograms();
-        }
-        if (!hasCachedDepts) {
-          await _deptService.fetchDepartments();
+        final savedDept = await StorageService.instance.read(
+          'progress_selected_dept',
+        );
+        final savedDoubleMajor = await StorageService.instance.read(
+          'progress_double_major',
+        );
+        final savedMinor = await StorageService.instance.read('progress_minor');
+        if (mounted) {
+          setState(() {
+            _selectedDept = savedDept ?? '';
+            _doubleMajor = savedDoubleMajor ?? '';
+            _minor = savedMinor ?? '';
+            _isProfileExpanded = _selectedDept.isEmpty;
+          });
         }
       } catch (e) {
-        debugPrint('Network fetch error: $e');
+        debugPrint('Error loading initial profile info: $e');
       }
-    }
 
-    if (!mounted) return;
+      // 2. 延遲載入以確保首頁 Bento 轉場動畫流暢播放完畢，避免阻塞 UI 線程
+      await Future.delayed(const Duration(milliseconds: 400));
 
-    // 檢查最終狀態：如果都沒有資料就是錯誤
-    if (_programService.programsNotifier.value.isEmpty ||
-        _deptService.departmentsNotifier.value.isEmpty) {
-      setState(() {
-        _isLoading = false;
-        _loadError = OfflineModeService.instance.isOffline
-            ? '離線模式不可用，請連接網路並重啟 App 以使用此功能'
-            : '無法載入資料，請檢查網路連線後重試';
-      });
-      return;
-    }
+      await Future.wait([
+        _programService.loadFromCache(),
+        _deptService.loadFromCache(),
+        _courseService.loadFromCache(),
+        ProgramApplicationService.instance.loadFromCache(),
+      ]);
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _loadError = null;
-      });
-      // 每次進入頁面載入完成後，自動跳出「關於學程進度」提示視窗
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showInfoDialog(Theme.of(context).colorScheme);
+      // 離線模式：跳過 network fetch，只用快取
+      if (!OfflineModeService.instance.isOffline) {
+        // 如果修課資料快取為空，或者與歷年成績快取有落差，則自動執行同步
+        final bool needsSync = await _courseService.checkIfSyncNeeded();
+        if (_courseService.resultsNotifier.value.isEmpty || needsSync) {
+          _courseService.fetchCourseHistory();
         }
-      });
-    }
+      }
 
-    if (savedProgramId != null && savedYear != null) {
-      final programs = _programService.programsNotifier.value;
-      final savedProgram = programs
-          .where((p) => p.programId == savedProgramId)
-          .toList();
-      if (savedProgram.isNotEmpty) {
-        final isWideScreen = MediaQuery.of(context).size.width >= 900;
+      await _loadFavorites();
+
+      final savedProgramId = await StorageService.instance.read(
+        'progress_last_program_id',
+      );
+      final savedYearStr = await StorageService.instance.read(
+        'progress_last_year',
+      );
+      final savedYear = savedYearStr != null
+          ? int.tryParse(savedYearStr)
+          : null;
+
+      // 如果快取有資料，先結束 loading 讓使用者看到內容
+      final hasCachedPrograms =
+          _programService.programsNotifier.value.isNotEmpty;
+      final hasCachedDepts = _deptService.departmentsNotifier.value.isNotEmpty;
+      if (hasCachedPrograms && hasCachedDepts) {
+        if (mounted) setState(() => _isLoading = false);
+      }
+
+      // 從網路取得最新資料（進入頁面且記憶體無資料時自動下載）
+      if (!OfflineModeService.instance.isOffline) {
+        try {
+          if (!hasCachedPrograms) {
+            await _programService.fetchPrograms();
+          }
+          if (!hasCachedDepts) {
+            await _deptService.fetchDepartments();
+          }
+        } catch (e) {
+          debugPrint('Network fetch error: $e');
+        }
+      }
+
+      if (!mounted) return;
+
+      // 檢查最終狀態：如果都沒有資料就是錯誤
+      if (_programService.programsNotifier.value.isEmpty ||
+          _deptService.departmentsNotifier.value.isEmpty) {
         setState(() {
-          _lastProgramId = savedProgramId;
-          _lastYear = savedYear;
+          _isLoading = false;
+          _loadError = OfflineModeService.instance.isOffline
+              ? '離線模式不可用，請連接網路並重啟 App 以使用此功能'
+              : '無法載入資料，請檢查網路連線後重試';
         });
-        await _loadVerificationStatuses();
+        return;
+      }
 
-        if (isWideScreen && mounted && _selectedDept.isNotEmpty) {
-          final prog = savedProgram.first;
-          setState(() {
-            _selectedProgram = prog;
-            _selectedYear = savedYear;
-          });
-          ProgramLinkService.instance.getPdfLink(prog.programName).then((link) {
-            if (mounted) {
-              setState(() => _pdfLink = link);
-            }
-          });
-          final result = await _isolateCheckEligibility(
-            program: prog,
-            year: savedYear,
-            semester: null,
-            studentDept: _selectedDept,
-            coursesTaken: _coursesTaken,
-            waivers: _waivers,
-            doubleMajorDepts: _doubleMajorDepts,
-            minorDepts: _minorDepts,
-            verificationStatuses: _verificationStatuses,
-          );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = null;
+        });
+        // 每次進入頁面載入完成後，自動跳出「關於學程進度」提示視窗
+        WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
+            _showInfoDialog(Theme.of(context).colorScheme);
+          }
+        });
+      }
+
+      if (savedProgramId != null && savedYear != null) {
+        final programs = _programService.programsNotifier.value;
+        final savedProgram = programs
+            .where((p) => p.programId == savedProgramId)
+            .toList();
+        if (savedProgram.isNotEmpty) {
+          final isWideScreen = MediaQuery.of(context).size.width >= 900;
+          setState(() {
+            _lastProgramId = savedProgramId;
+            _lastYear = savedYear;
+          });
+          await _loadVerificationStatuses();
+
+          if (isWideScreen && mounted && _selectedDept.isNotEmpty) {
+            final prog = savedProgram.first;
             setState(() {
-              _selectedResult = result;
+              _selectedProgram = prog;
+              _selectedYear = savedYear;
             });
+            ProgramLinkService.instance.getPdfLink(prog.programName).then((
+              link,
+            ) {
+              if (mounted) {
+                setState(() => _pdfLink = link);
+              }
+            });
+            final result = await _isolateCheckEligibility(
+              program: prog,
+              year: savedYear,
+              semester: null,
+              studentDept: _selectedDept,
+              coursesTaken: _coursesTaken,
+              waivers: _waivers,
+              doubleMajorDepts: _doubleMajorDepts,
+              minorDepts: _minorDepts,
+              verificationStatuses: _verificationStatuses,
+            );
+            if (mounted) {
+              setState(() {
+                _selectedResult = result;
+              });
+            }
           }
         }
       }
-    }
 
-    if (mounted && _selectedDept.isNotEmpty && _coursesTaken.isNotEmpty) {
-      await _computeAllPrograms();
-    }
+      if (mounted && _selectedDept.isNotEmpty && _coursesTaken.isNotEmpty) {
+        await _computeAllPrograms();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -616,9 +621,12 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
 
   Future<void> _checkProgram(ProgramRule program, int year) async {
     if (_selectedDept.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('請先填寫你的科系並儲存'), duration: const Duration(seconds: 2)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('請先填寫你的科系並儲存'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
@@ -832,10 +840,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('學程進度'),
-        actions: [
-          _buildInfoButton(colorScheme),
-          const SizedBox(width: 12),
-        ],
+        actions: [_buildInfoButton(colorScheme), const SizedBox(width: 12)],
       ),
       body: isWideScreen
           ? Padding(
@@ -1142,8 +1147,12 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                                   color:
                                       LayoutStyleNotifier.instance.isLiquidGlass
                                       ? (colorScheme.isDark
-                                            ? Colors.white.withValues(alpha: 0.08)
-                                            : Colors.black.withValues(alpha: 0.04))
+                                            ? Colors.white.withValues(
+                                                alpha: 0.08,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.04,
+                                              ))
                                       : colorScheme.secondaryCardBackground,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 20,
@@ -1538,8 +1547,6 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
           : content,
     );
   }
-
-
 
   // ─────────────────────────────────────────────
   // Info button + disclaimer dialog

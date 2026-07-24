@@ -52,7 +52,7 @@ lib/
 │   ├── score_tracking_page.dart          # 成績目標追蹤與數據遷移
 │   └── calendar_page.dart                # 校園行事曆頁面
 ├── services/     # 核心業務邏輯與系統服務層
-│   ├── ai_personalization_service.dart     # AI 歷年課程分析與推薦服務
+│   ├── course_history_sync_service.dart   # 歷年修課系所與課程進度對照同步服務
 │   ├── bus_service.dart / bus_parser.dart  # 校車動態資料抓取與時刻表解析
 │   ├── course_evaluation_service.dart      # 課程大綱與配分比例解析服務
 │   ├── course_exception_service.dart       # 異常處理單表格產生服務
