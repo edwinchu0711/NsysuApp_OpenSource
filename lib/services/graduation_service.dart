@@ -6,6 +6,7 @@ import 'package:html/parser.dart' show parse;
 // 假設這是你存放 base64md5 的地方
 import '../utils/utils.dart';
 import '../models/graduation_model.dart';
+import 'http_client_factory.dart';
 
 class GraduationService {
   // Singleton
@@ -67,7 +68,7 @@ class GraduationService {
     String password,
   ) async {
     // debugPrint("🌐 開始連線教務處取得畢業檢核...");
-    final http.Client client = http.Client();
+    final http.Client client = createHttpClient();
 
     try {
       // Step A: SSO 登入

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class DeptOption {
   final String code;
@@ -45,7 +46,9 @@ class DepartmentService {
     statusNotifier.value = '正在載入科系列表...';
 
     try {
-      final response = await http.get(Uri.parse(_url));
+      final client = createHttpClient();
+      final response = await client.get(Uri.parse(_url));
+      client.close();
       if (response.statusCode != 200) {
         statusNotifier.value = '載入失敗';
         return;

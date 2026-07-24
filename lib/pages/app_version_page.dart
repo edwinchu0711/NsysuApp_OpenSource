@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
 
 // 1. 這裡加上 const 關鍵字，修復「isn't a const constructor」的問題
 class VersionRecord {
@@ -21,6 +24,11 @@ class AppVersionPage extends StatelessWidget {
 
   // 2. 現在這裡可以使用 const list 了
   final List<VersionRecord> history = const [
+    VersionRecord(
+      version: "v6.1.3",
+      date: "2026-07-08",
+      description: "新增全新主題、優化初始化、優化頁面渲染、修復課程查詢Bug",
+    ),
     VersionRecord(
       version: "v6.1.2",
       date: "2026-07-01",
@@ -93,17 +101,19 @@ class AppVersionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isWide = MediaQuery.of(context).size.width >= 800;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     if (isWide) {
-      return Scaffold(
-        backgroundColor: colorScheme.pageBackground,
+      return GlassPageScaffold(
         appBar: AppBar(
           title: const Text(
             "版本資訊",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
-          backgroundColor: colorScheme.cardBackground,
+          backgroundColor: isLiquidGlass
+              ? Colors.transparent
+              : colorScheme.cardBackground,
           foregroundColor: colorScheme.primaryText,
           elevation: 0,
           iconTheme: IconThemeData(color: colorScheme.primaryText),
@@ -121,31 +131,29 @@ class AppVersionPage extends StatelessWidget {
                     width: 320,
                     child: Container(
                       padding: const EdgeInsets.all(24.0),
-                      decoration: BoxDecoration(
-                        color: colorScheme.cardBackground,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: colorScheme.borderColor),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
+                      // liquid glass：學生服務系統區塊不使用模糊背景，直接透出極光；
+                      // 其他模式維持原卡片樣式。
+                      decoration: isLiquidGlass
+                          ? null
+                          : BoxDecoration(
+                              color: colorScheme.cardBackground,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: colorScheme.borderColor,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  spreadRadius: 1,
+                                  blurRadius: 5,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: Colors.blue[50],
-                            child: const Icon(
-                              Icons.info_outline_rounded,
-                              size: 40,
-                              color: Colors.blue,
-                            ),
-                          ),
+                          _buildInfoIcon(context, 40),
                           const SizedBox(height: 20),
                           Text(
                             "學生服務系統",
@@ -166,7 +174,7 @@ class AppVersionPage extends StatelessWidget {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              "當前版本: v6.1.2",
+                              "當前版本: v6.1.3",
                               style: TextStyle(
                                 color: colorScheme.accentBlue,
                                 fontWeight: FontWeight.bold,
@@ -213,6 +221,11 @@ class AppVersionPage extends StatelessWidget {
                         Expanded(
                           child: ListView.builder(
                             itemCount: history.length,
+                            padding: EdgeInsets.only(
+                              bottom: LayoutStyleNotifier.instance.isLiquidGlass
+                                  ? 100
+                                  : 0,
+                            ),
                             itemBuilder: (context, index) {
                               final item = history[index];
                               return _buildHistoryCard(context, item);
@@ -231,15 +244,16 @@ class AppVersionPage extends StatelessWidget {
     }
 
     // Mobile layout (EXACTLY as original)
-    return Scaffold(
-      backgroundColor: colorScheme.pageBackground,
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text(
           "版本資訊",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : colorScheme.cardBackground,
         foregroundColor: colorScheme.primaryText,
         elevation: 0,
       ),
@@ -249,27 +263,23 @@ class AppVersionPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(24.0),
               margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(
-                color: colorScheme.cardBackground,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                border: Border(
-                  bottom: BorderSide(color: colorScheme.borderColor),
-                ),
-              ),
+              // liquid glass：學生服務系統區塊不使用模糊背景，直接透出極光；
+              // 其他模式維持原卡片樣式。
+              decoration: isLiquidGlass
+                  ? null
+                  : BoxDecoration(
+                      color: colorScheme.cardBackground,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(30),
+                        bottomRight: Radius.circular(30),
+                      ),
+                      border: Border(
+                        bottom: BorderSide(color: colorScheme.borderColor),
+                      ),
+                    ),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 35,
-                    backgroundColor: Colors.blue[50],
-                    child: const Icon(
-                      Icons.info_outline_rounded,
-                      size: 35,
-                      color: Colors.blue,
-                    ),
-                  ),
+                  _buildInfoIcon(context, 35),
                   const SizedBox(height: 16),
                   Text(
                     "學生服務系統",
@@ -281,7 +291,7 @@ class AppVersionPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "當前版本: v6.1.2",
+                    "當前版本: v6.1.3",
                     style: TextStyle(
                       color: colorScheme.subtitleText,
                       fontSize: 14,
@@ -310,30 +320,72 @@ class AppVersionPage extends StatelessWidget {
               return _buildHistoryCard(context, item);
             }, childCount: history.length),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 40,
+            ),
+          ),
         ],
       ),
     );
   }
 
+  /// 應用程式資訊 icon：liquid glass 模式下以半透明圓框框起來；
+  /// 其他模式維持原本的淡藍色圓底 CircleAvatar。
+  Widget _buildInfoIcon(BuildContext context, double radius) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    if (!isLiquidGlass) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: Colors.blue[50],
+        child: Icon(
+          Icons.info_outline_rounded,
+          size: radius,
+          color: Colors.blue,
+        ),
+      );
+    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.10)
+            : Colors.white.withValues(alpha: 0.5),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.14)
+              : Colors.white.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Icon(Icons.info_outline_rounded, size: radius, color: Colors.blue),
+    );
+  }
+
   Widget _buildHistoryCard(BuildContext context, VersionRecord item) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 12)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -351,14 +403,27 @@ class AppVersionPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: colorScheme.secondaryCardBackground,
+                  color: isLiquidGlass
+                      ? (isDark
+                            ? Colors.white.withValues(alpha: 0.10)
+                            : Colors.white.withValues(alpha: 0.5))
+                      : colorScheme.secondaryCardBackground,
                   borderRadius: BorderRadius.circular(6),
+                  border: isLiquidGlass
+                      ? Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.14)
+                              : Colors.white.withValues(alpha: 0.4),
+                        )
+                      : null,
                 ),
                 child: Text(
                   item.date,
                   style: TextStyle(
                     fontSize: 12,
-                    color: colorScheme.subtitleText,
+                    color: isLiquidGlass
+                        ? colorScheme.primaryText
+                        : colorScheme.subtitleText,
                   ),
                 ),
               ),

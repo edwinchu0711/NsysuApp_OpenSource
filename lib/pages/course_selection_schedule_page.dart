@@ -8,9 +8,13 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'course_selection/course_selection_page.dart';
 import 'course_exception/course_exception_handling_page.dart'; // 引入異常處理頁面
 import '../../services/course_query_service.dart'; // 請確認路徑是否正確
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
-import '../../services/session_service.dart';
+import '../theme/layout_style_notifier.dart';
 import '../../utils/utils.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../services/http_client_factory.dart';
 
 bool test = false;
 
@@ -47,7 +51,7 @@ class _CourseSelectionSchedulePageState
   bool _experimentalAbnormalEnabled = false;
 
   // --- 連線設定 ---
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
   final String _baseUrl = "https://selcrs.nsysu.edu.tw"; // 學校系統基底網址
 
   @override
@@ -107,6 +111,15 @@ class _CourseSelectionSchedulePageState
   // ==========================================================
   Future<void> _checkRealTimeSystemStatus({bool forceRefresh = false}) async {
     if (!mounted) return;
+
+    if (OfflineErrorHandler.isOffline) {
+      setState(() {
+        _isSystemOpen = false;
+        _systemStatusMessage = "離線模式下無法使用";
+        _isCheckingSystem = false;
+      });
+      return;
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -359,12 +372,15 @@ class _CourseSelectionSchedulePageState
         }
 
         if (isNetworkError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("目前沒有連線到網路"),
-              backgroundColor: Colors.red,
-            ),
-          );
+          if (!OfflineErrorHandler.isOffline) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("目前沒有連線到網路"),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
           setState(() => _isLoading = false);
         } else {
           // 沒有網路問題但抓不到資料，更新時間並提示
@@ -374,12 +390,15 @@ class _CourseSelectionSchedulePageState
             ).format(DateTime.now());
             _isLoading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("目前抓取不到選課時程資料"),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          if (!OfflineErrorHandler.isOffline) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("目前抓取不到選課時程資料"),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         }
       }
     }
@@ -666,7 +685,9 @@ class _CourseSelectionSchedulePageState
   Future<Map<String, dynamic>> fetchScheduleFromNsysu() async {
     try {
       final url = Uri.parse('https://selcrs.nsysu.edu.tw/');
-      final response = await http.get(url);
+      final client = createHttpClient();
+      final response = await client.get(url);
+      client.close();
 
       final String htmlContent = response.body;
 
@@ -717,7 +738,9 @@ class _CourseSelectionSchedulePageState
     final url = Uri.parse(
       'https://edwinchu0711.github.io/CourseSelectionDateUpdate/course-selection/selection_schedule.json',
     );
-    final response = await http.get(url);
+    final client = createHttpClient();
+    final response = await client.get(url);
+    client.close();
     if (response.statusCode == 200) {
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
       if (decoded is Map<String, dynamic>) {
@@ -744,6 +767,7 @@ class _CourseSelectionSchedulePageState
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     final semStr = CourseQueryService.instance.currentSemester;
     String semDisplay = "";
     if (semStr.length == 4) {
@@ -755,11 +779,14 @@ class _CourseSelectionSchedulePageState
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = screenWidth >= 800;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: Text("選課時程"),
         centerTitle: true,
-        elevation: 0.5,
+        backgroundColor: isLiquidGlass ? Colors.transparent : null,
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
+        elevation: isLiquidGlass ? 0 : 0.5,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
@@ -774,10 +801,18 @@ class _CourseSelectionSchedulePageState
                 : IconButton(
                     icon: const Icon(Icons.refresh_rounded),
                     tooltip: "重新整理與檢查",
-                    onPressed: () {
+                    onPressed: () async {
                       // 按下重新整理時：1. 刷新時程表 JSON  2. 重新戳學校伺服器檢查狀態
-                      _checkAndLoadData(forceRefresh: true);
-                      _checkRealTimeSystemStatus(forceRefresh: true);
+                      if (await OfflineErrorHandler.handleRefresh(context))
+                        return;
+                      try {
+                        await _checkAndLoadData(forceRefresh: true);
+                        await _checkRealTimeSystemStatus(forceRefresh: true);
+                      } catch (e) {
+                        if (mounted) {
+                          await OfflineErrorHandler.show(context, e);
+                        }
+                      }
                     },
                   ),
           ),
@@ -821,42 +856,59 @@ class _CourseSelectionSchedulePageState
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                "選課日程表",
+                                "選課時程表",
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: colorScheme.primaryText,
                                 ),
                               ),
+                              const Spacer(),
+                              _buildUpdateTimeInline(),
                             ],
                           ),
                         ),
                         Expanded(
                           child: Container(
-                            decoration: BoxDecoration(
-                              color: colorScheme.cardBackground,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colorScheme.isDark
-                                      ? Colors.black26
-                                      : Colors.black.withOpacity(0.03),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            foregroundDecoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: colorScheme.borderColor,
-                                width: 0.8,
-                              ),
-                            ),
+                            decoration: isLiquidGlass
+                                ? (glassCardDecoration(
+                                        context,
+                                        borderRadius: 16,
+                                      ) ??
+                                      BoxDecoration(
+                                        color: colorScheme.cardBackground,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ))
+                                : BoxDecoration(
+                                    color: colorScheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colorScheme.isDark
+                                            ? Colors.black26
+                                            : Colors.black.withValues(
+                                                alpha: 0.03,
+                                              ),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                            foregroundDecoration: isLiquidGlass
+                                ? null
+                                : BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: colorScheme.borderColor,
+                                      width: 0.8,
+                                    ),
+                                  ),
                             clipBehavior: Clip.antiAlias,
                             child: ListView.builder(
                               physics: const BouncingScrollPhysics(),
-                              padding: EdgeInsets.zero,
+                              padding: EdgeInsets.only(
+                                bottom: isLiquidGlass ? 100 : 0,
+                              ),
                               itemCount: _mainList.length,
                               itemBuilder: (context, index) {
                                 return _buildCleanRow(_mainList[index]);
@@ -899,26 +951,39 @@ class _CourseSelectionSchedulePageState
                           ),
                         ),
                         Container(
-                          decoration: BoxDecoration(
-                            color: colorScheme.cardBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colorScheme.isDark
-                                    ? Colors.black26
-                                    : Colors.black.withOpacity(0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          foregroundDecoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: colorScheme.borderColor,
-                              width: 0.8,
-                            ),
-                          ),
+                          decoration: isLiquidGlass
+                              ? (glassCardDecoration(
+                                      context,
+                                      borderRadius: 16,
+                                    ) ??
+                                    BoxDecoration(
+                                      color: colorScheme.cardBackground,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ))
+                              : BoxDecoration(
+                                  color: colorScheme.cardBackground,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colorScheme.isDark
+                                          ? Colors.black26
+                                          : Colors.black.withValues(
+                                              alpha: 0.03,
+                                            ),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                          foregroundDecoration: isLiquidGlass
+                              ? null
+                              : BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: colorScheme.borderColor,
+                                    width: 0.8,
+                                  ),
+                                ),
                           clipBehavior: Clip.antiAlias,
                           child: _buildActiveStatusRow(),
                         ),
@@ -950,26 +1015,39 @@ class _CourseSelectionSchedulePageState
                             ),
                           ),
                           Container(
-                            decoration: BoxDecoration(
-                              color: colorScheme.cardBackground,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colorScheme.isDark
-                                      ? Colors.black26
-                                      : Colors.black.withOpacity(0.03),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            foregroundDecoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: colorScheme.borderColor,
-                                width: 0.8,
-                              ),
-                            ),
+                            decoration: isLiquidGlass
+                                ? (glassCardDecoration(
+                                        context,
+                                        borderRadius: 16,
+                                      ) ??
+                                      BoxDecoration(
+                                        color: colorScheme.cardBackground,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ))
+                                : BoxDecoration(
+                                    color: colorScheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colorScheme.isDark
+                                            ? Colors.black26
+                                            : Colors.black.withValues(
+                                                alpha: 0.03,
+                                              ),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                            foregroundDecoration: isLiquidGlass
+                                ? null
+                                : BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: colorScheme.borderColor,
+                                      width: 0.8,
+                                    ),
+                                  ),
                             clipBehavior: Clip.antiAlias,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -980,28 +1058,6 @@ class _CourseSelectionSchedulePageState
                           ),
                           const SizedBox(height: 24),
                         ],
-                        // 資料更新時間
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color: colorScheme.secondaryCardBackground,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: colorScheme.borderColor,
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Text(
-                            "資料更新時間：$_dataUpdateTime",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: colorScheme.subtitleText,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -1012,7 +1068,12 @@ class _CourseSelectionSchedulePageState
               children: [
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      8,
+                      16,
+                      isLiquidGlass ? 100 : 16,
+                    ),
                     children: [
                       // ✅ 狀態區塊 (改用全新的窄螢幕控制卡片)
                       _buildNarrowActiveStatusCard(),
@@ -1021,23 +1082,29 @@ class _CourseSelectionSchedulePageState
 
                       // 主日程表卡片
                       Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.cardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: colorScheme.isDark
-                                  ? Colors.black38
-                                  : Colors.black.withOpacity(0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: colorScheme.borderColor,
-                            width: 0.8,
-                          ),
-                        ),
+                        decoration: isLiquidGlass
+                            ? (glassCardDecoration(context, borderRadius: 16) ??
+                                  BoxDecoration(
+                                    color: colorScheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ))
+                            : BoxDecoration(
+                                color: colorScheme.cardBackground,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colorScheme.isDark
+                                        ? Colors.black38
+                                        : Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: colorScheme.borderColor,
+                                  width: 0.8,
+                                ),
+                              ),
                         clipBehavior: Clip.antiAlias,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -1064,6 +1131,8 @@ class _CourseSelectionSchedulePageState
                                       color: colorScheme.primaryText,
                                     ),
                                   ),
+                                  const Spacer(),
+                                  _buildUpdateTimeInline(),
                                 ],
                               ),
                             ),
@@ -1077,23 +1146,34 @@ class _CourseSelectionSchedulePageState
                       if (_bottomList.isNotEmpty) ...[
                         const SizedBox(height: 24),
                         Container(
-                          decoration: BoxDecoration(
-                            color: colorScheme.cardBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colorScheme.isDark
-                                    ? Colors.black38
-                                    : Colors.black.withOpacity(0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(
-                              color: colorScheme.borderColor,
-                              width: 0.8,
-                            ),
-                          ),
+                          decoration: isLiquidGlass
+                              ? (glassCardDecoration(
+                                      context,
+                                      borderRadius: 16,
+                                    ) ??
+                                    BoxDecoration(
+                                      color: colorScheme.cardBackground,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ))
+                              : BoxDecoration(
+                                  color: colorScheme.cardBackground,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colorScheme.isDark
+                                          ? Colors.black38
+                                          : Colors.black.withValues(
+                                              alpha: 0.04,
+                                            ),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                  border: Border.all(
+                                    color: colorScheme.borderColor,
+                                    width: 0.8,
+                                  ),
+                                ),
                           clipBehavior: Clip.antiAlias,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -1135,39 +1215,45 @@ class _CourseSelectionSchedulePageState
                   ),
                 ),
 
-                // 底部資料時間
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  decoration: BoxDecoration(
-                    color: colorScheme.isDark
-                        ? colorScheme.scaffoldBackground
-                        : Colors.grey[50],
-                    border: Border(
-                      top: BorderSide(
-                        color: colorScheme.borderColor,
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    "資料更新時間：$_dataUpdateTime",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: colorScheme.subtitleText,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+                // 底部資料時間已移至「選課時程表」標題右側
               ],
             ),
+    );
+  }
+
+  /// 簡化的更新時間（去掉年份）：將 "yyyy/MM/dd HH:mm" 轉為 "MM/dd HH:mm"。
+  String get _dataUpdateShort {
+    final full = _dataUpdateTime;
+    if (full.length >= 16) return full.substring(5);
+    return full;
+  }
+
+  /// 顯示在「選課時程表」標題右側的精簡更新時間（icon + 更新時間）。
+  Widget _buildUpdateTimeInline() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.update_rounded, size: 13, color: colorScheme.subtitleText),
+        const SizedBox(width: 4),
+        Text(
+          "更新 $_dataUpdateShort",
+          style: TextStyle(
+            fontSize: 11,
+            color: colorScheme.subtitleText,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 
   // ✅ 設計全新的窄螢幕控制卡片方法
   Widget _buildNarrowActiveStatusCard() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
+    final bool isOffline = OfflineErrorHandler.isOffline;
 
     // 1. 計算選課狀態
     Color statusTextColor;
@@ -1175,7 +1261,11 @@ class _CourseSelectionSchedulePageState
     String statusTitle;
     bool showStatusButton = false;
 
-    if (_isCheckingSystem) {
+    if (isOffline) {
+      statusTextColor = colorScheme.subtitleText;
+      statusIcon = Icons.cloud_off_rounded;
+      statusTitle = "離線模式下無法使用";
+    } else if (_isCheckingSystem) {
       statusTextColor = colorScheme.bodyText;
       statusIcon = Icons.sync;
       statusTitle = "系統狀態檢查中";
@@ -1206,29 +1296,39 @@ class _CourseSelectionSchedulePageState
     bool isExceptionActive =
         test || _activeItemKeys.any((key) => key.contains('異常'));
 
-    Color exceptionTextColor = isExceptionActive
-        ? (colorScheme.isDark ? Colors.green[300]! : Colors.green[800]!)
-        : colorScheme.subtitleText;
-    IconData exceptionIcon = isExceptionActive
-        ? Icons.error_outline_rounded
-        : Icons.radio_button_off_rounded;
+    Color exceptionTextColor = isOffline
+        ? colorScheme.subtitleText
+        : (isExceptionActive
+              ? (colorScheme.isDark ? Colors.green[300]! : Colors.green[800]!)
+              : colorScheme.subtitleText);
+    IconData exceptionIcon = isOffline
+        ? Icons.cloud_off_rounded
+        : (isExceptionActive
+              ? Icons.error_outline_rounded
+              : Icons.radio_button_off_rounded);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.isDark
-                ? Colors.black38
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: colorScheme.borderColor, width: 0.8),
-      ),
+      decoration: isLiquidGlass
+          ? (glassCardDecoration(context, borderRadius: 16) ??
+                BoxDecoration(
+                  color: colorScheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                ))
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.isDark
+                      ? Colors.black38
+                      : Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(color: colorScheme.borderColor, width: 0.8),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1285,7 +1385,7 @@ class _CourseSelectionSchedulePageState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        statusTitle,
+                        isOffline ? "離線模式下無法使用" : statusTitle,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -1294,7 +1394,7 @@ class _CourseSelectionSchedulePageState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _systemStatusMessage,
+                        isOffline ? "離線模式下無法使用" : _systemStatusMessage,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1310,8 +1410,9 @@ class _CourseSelectionSchedulePageState
                   SizedBox(
                     height: 32,
                     child: ElevatedButton(
-                      onPressed: () =>
-                          _navigateToCourseSelection(enableQuery: true),
+                      onPressed: !isOffline
+                          ? () => _navigateToCourseSelection(enableQuery: true)
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isSystemOpen
                             ? colorScheme.primary
@@ -1321,6 +1422,12 @@ class _CourseSelectionSchedulePageState
                                         : Colors.orange[700]!)
                                   : colorScheme.primary),
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: colorScheme.isDark
+                            ? Colors.grey[800]
+                            : Colors.grey[300],
+                        disabledForegroundColor: colorScheme.isDark
+                            ? Colors.grey[600]
+                            : Colors.grey[500],
                         elevation: 0,
                         shape: const StadiumBorder(),
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1360,7 +1467,9 @@ class _CourseSelectionSchedulePageState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          isExceptionActive ? "目前為異常處理階段" : "非異常處理時段",
+                          isOffline
+                              ? "離線模式下無法使用"
+                              : (isExceptionActive ? "目前為異常處理階段" : "非異常處理時段"),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -1369,7 +1478,9 @@ class _CourseSelectionSchedulePageState
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          isExceptionActive ? "請儘速提出申請" : "功能暫未開放",
+                          isOffline
+                              ? "離線模式下無法使用"
+                              : (isExceptionActive ? "請儘速提出申請" : "功能暫未開放"),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1384,13 +1495,17 @@ class _CourseSelectionSchedulePageState
                   SizedBox(
                     height: 32,
                     child: OutlinedButton(
-                      onPressed: isExceptionActive
+                      onPressed:
+                          (isExceptionActive && !OfflineErrorHandler.isOffline)
                           ? () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
                                       const CourseExceptionHandlingPage(),
+                                  settings: const RouteSettings(
+                                    name: 'course_exception_handling',
+                                  ),
                                 ),
                               );
                             }
@@ -1408,7 +1523,7 @@ class _CourseSelectionSchedulePageState
                         shape: const StadiumBorder(),
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         disabledForegroundColor: colorScheme.subtitleText
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                       ),
                       child: const Text(
                         "異常處理",
@@ -1431,11 +1546,16 @@ class _CourseSelectionSchedulePageState
   // ✅ 【修改】根據伺服器回傳狀態顯示 UI (加入異常處理判斷)
   Widget _buildActiveStatusRow() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final bool isOffline = OfflineErrorHandler.isOffline;
+
     // 1. 基礎狀態判斷 (藍/橘/灰)
     Color primaryTextColor = colorScheme.bodyText;
     bool showStatusButton = false;
 
-    if (_isCheckingSystem) {
+    if (isOffline) {
+      primaryTextColor = colorScheme.subtitleText;
+    } else if (_isCheckingSystem) {
       primaryTextColor = colorScheme.bodyText;
     } else if (_isSystemOpen) {
       primaryTextColor = colorScheme.isDark
@@ -1465,12 +1585,14 @@ class _CourseSelectionSchedulePageState
         Container(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
           decoration: BoxDecoration(
-            color: colorScheme.cardBackground,
+            color: isLiquidGlass
+                ? Colors.transparent
+                : colorScheme.cardBackground,
             border: Border(bottom: BorderSide(color: colorScheme.borderColor)),
           ),
           child: Row(
             children: [
-              if (_isCheckingSystem)
+              if (_isCheckingSystem && !isOffline)
                 Padding(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: SizedBox(
@@ -1484,7 +1606,7 @@ class _CourseSelectionSchedulePageState
                 ),
               Expanded(
                 child: Text(
-                  _systemStatusMessage,
+                  isOffline ? "離線模式下無法使用" : _systemStatusMessage,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -1493,7 +1615,7 @@ class _CourseSelectionSchedulePageState
                   ),
                 ),
               ),
-              if (!_isCheckingSystem)
+              if (!_isCheckingSystem || isOffline)
                 _buildActionButton(
                   "進入選課系統",
                   _isSystemOpen
@@ -1503,7 +1625,9 @@ class _CourseSelectionSchedulePageState
                                   ? const Color(0xFFFFB74D)
                                   : Colors.orange[700]!)
                             : colorScheme.primary),
-                  () => _navigateToCourseSelection(enableQuery: true),
+                  !isOffline
+                      ? () => _navigateToCourseSelection(enableQuery: true)
+                      : null,
                 ),
             ],
           ),
@@ -1514,7 +1638,9 @@ class _CourseSelectionSchedulePageState
           Container(
             padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
             decoration: BoxDecoration(
-              color: colorScheme.cardBackground,
+              color: isLiquidGlass
+                  ? Colors.transparent
+                  : colorScheme.cardBackground,
               border: Border(
                 bottom: BorderSide(color: colorScheme.borderColor),
               ),
@@ -1523,13 +1649,15 @@ class _CourseSelectionSchedulePageState
               children: [
                 Expanded(
                   child: Text(
-                    isExceptionActive ? "目前為異常處理階段" : "非異常處理時段",
+                    isOffline
+                        ? "離線模式下無法使用"
+                        : (isExceptionActive ? "目前為異常處理階段" : "非異常處理時段"),
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: isExceptionActive
+                      fontWeight: (isExceptionActive && !isOffline)
                           ? FontWeight.bold
                           : FontWeight.w600,
-                      color: isExceptionActive
+                      color: (isExceptionActive && !isOffline)
                           ? (colorScheme.isDark
                                 ? Colors.green[300]
                                 : Colors.green[800])
@@ -1540,18 +1668,21 @@ class _CourseSelectionSchedulePageState
                 ),
                 _buildActionButton(
                   "前往異常處理",
-                  isExceptionActive
+                  (isExceptionActive && !isOffline)
                       ? (colorScheme.isDark
                             ? Colors.green[700]!
                             : Colors.green[600]!)
                       : Colors.transparent,
-                  isExceptionActive
+                  (isExceptionActive && !isOffline)
                       ? () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
                                   const CourseExceptionHandlingPage(),
+                              settings: const RouteSettings(
+                                name: 'course_exception_handling',
+                              ),
                             ),
                           );
                         }
@@ -1595,6 +1726,7 @@ class _CourseSelectionSchedulePageState
     bool forceInactive = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     final String title = entry.key;
     final Map<String, dynamic> content = entry.value is Map
         ? Map<String, dynamic>.from(entry.value)
@@ -1615,7 +1747,7 @@ class _CourseSelectionSchedulePageState
     return Container(
       padding: EdgeInsets.symmetric(vertical: 20, horizontal: isWide ? 24 : 12),
       decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
+        color: isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
         border: Border(
           bottom: BorderSide(color: colorScheme.borderColor),
           left: BorderSide(
@@ -1652,7 +1784,7 @@ class _CourseSelectionSchedulePageState
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: colorScheme.primary.withOpacity(0.1),
+                      color: colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/course_assistant_models.dart';
 import '../../../models/course_model.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/layout_style_notifier.dart';
 import '../course_assistant_constants.dart';
 import '../course_assistant_utils.dart';
 
@@ -26,9 +27,15 @@ class AssistantTimetable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final headerBgColor = colorScheme.isDark
-        ? const Color(0xFF252B3B)
-        : const Color(0xFFF4F8FF);
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
+    final headerBgColor = isLiquidGlass
+        ? (isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.white.withValues(alpha: 0.45))
+        : (isDark
+            ? const Color(0xFF252B3B)
+            : const Color(0xFFF4F8FF));
     int maxDay = 5;
 
     // 計算課程的最大天數與節次
@@ -119,11 +126,20 @@ class AssistantTimetable extends StatelessWidget {
     }
 
     return Container(
-      color: colorScheme.isDark
-          ? colorScheme.scaffoldBackground
-          : Colors.grey[50],
+      color: isLiquidGlass
+          ? Colors.transparent
+          : (colorScheme.isDark
+              ? colorScheme.scaffoldBackground
+              : Colors.grey[50]),
       child: Table(
-        border: TableBorder.all(color: colorScheme.borderColor, width: 0.5),
+        border: TableBorder.all(
+          color: isLiquidGlass
+              ? (colorScheme.isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.35))
+              : colorScheme.borderColor,
+          width: 0.5,
+        ),
         columnWidths: {0: FixedColumnWidth(periodColWidth)},
         defaultVerticalAlignment: TableCellVerticalAlignment.middle,
         children: [
@@ -161,7 +177,9 @@ class AssistantTimetable extends StatelessWidget {
           ...visiblePeriods.map((period) {
             String timeInfo = kTimeMapping[period] ?? "";
 
-            // 檢查此節次中，是否每一天都只有最多一個項目（無衝突）
+            // 計算此節次中「單格項目」的最高高度，作為統一列高（overrideHeight）。
+            // liquid glass：一律以此為統一列高，讓衝堂格白霧底填滿整格。
+            // 其他模式：維持原行為（有衝堂時不強制統一列高）。
             bool hasConflict = false;
             double maxCellHeight = 70.0;
 
@@ -172,6 +190,13 @@ class AssistantTimetable extends StatelessWidget {
 
               if (cellItemCount >= 2) {
                 hasConflict = true;
+                if (isLiquidGlass) {
+                  // 估算衝堂格子的總高度，每個項目約 60.0
+                  double h = cellItemCount * 60.0;
+                  if (h > maxCellHeight) {
+                    maxCellHeight = h;
+                  }
+                }
               } else if (cellItemCount == 1) {
                 double h = 70.0;
                 if (cellCourses.isNotEmpty) {
@@ -199,11 +224,11 @@ class AssistantTimetable extends StatelessWidget {
               }
             }
 
-            // 如果整個星期中此節次都沒有任何天有衝突，就計算最高的高度作為 overrideHeight
-            double? overrideHeight;
-            if (!hasConflict) {
-              overrideHeight = maxCellHeight;
-            }
+            // liquid glass：以此為統一列高，衝堂格以此為最小高度並隨內容長高，白霧底填滿整格。
+            // 其他模式：維持原行為（有衝堂時 overrideHeight 為 null，各格各自計算高度）。
+            final double? overrideHeight = isLiquidGlass
+                ? maxCellHeight
+                : (hasConflict ? null : maxCellHeight);
 
             return TableRow(
               children: [
@@ -245,7 +270,14 @@ class AssistantTimetable extends StatelessWidget {
 
                   // 情況一：完全空堂
                   if (cellCourses.isEmpty && cellEvents.isEmpty) {
-                    return Container(height: overrideHeight ?? 70);
+                    return Container(
+                      height: overrideHeight ?? 70,
+                      color: isLiquidGlass
+                          ? (isDark
+                              ? Colors.transparent
+                              : Colors.white.withValues(alpha: 0.15))
+                          : null,
+                    );
                   }
 
                   // 情況二：這個時段「只有一堂正規課程」
@@ -478,14 +510,26 @@ class AssistantTimetable extends StatelessWidget {
                   }
 
                   return Container(
-                    constraints: const BoxConstraints(
-                      minHeight: 70,
-                    ), // 多堂課時讓他自適應長高
+                    constraints: BoxConstraints(
+                      // liquid glass：以列高為最小高度，不夠時再隨內容長高；
+                      // 其他模式：維持原最小高度 70。
+                      minHeight: overrideHeight ?? 70,
+                    ),
                     padding: const EdgeInsets.all(1),
-                    color: colorScheme.isDark
-                        ? colorScheme.scaffoldBackground
-                        : Colors.grey[50],
+                    // liquid glass：置中讓內容在撐滿的格子裡垂直置中；
+                    // 其他模式：不額外置中，維持原行為。
+                    alignment: isLiquidGlass ? Alignment.center : null,
+                    color: isLiquidGlass
+                        ? (isDark
+                            ? Colors.transparent
+                            : Colors.white.withValues(alpha: 0.15))
+                        : (colorScheme.isDark
+                            ? colorScheme.scaffoldBackground
+                            : Colors.grey[50]),
                     child: Column(
+                      // mainAxisSize.min：貢獻內容高度使列隨課程拉長。
+                      // liquid glass 下外層 Container 以 overrideHeight 為 minHeight 並置中，
+                      // 因此當其他格較高時白霧底會撐到列高並填滿、內容垂直置中。
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: cellWidgets,

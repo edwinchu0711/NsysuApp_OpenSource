@@ -5,7 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course_model.dart';
 import '../services/course_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_dropdown.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_dialog.dart';
 import '../services/course_query_service.dart';
 
 class CourseSchedulePage extends StatefulWidget {
@@ -90,6 +93,11 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
   void initState() {
     super.initState();
     _loadCachedData();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   // --- 核心邏輯：讀取快取 ---
@@ -242,7 +250,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
         ? (screenWidth > 960 ? (screenWidth - 960) / 2 + 16.0 : 24.0)
         : 0.0;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("歷年課表查詢"),
         actions: [
@@ -260,56 +268,62 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
           : SingleChildScrollView(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                child: isTablet
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 左邊課表區域
-                          Expanded(
-                            flex: 55,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 16),
-                                // 學期切換選擇器 (內含匯出按鈕)
-                                _buildSemesterSelector(isTablet: isTablet),
-                                const SizedBox(height: 16),
-                                // 課表主體
-                                _buildTimeTable(
-                                  _allCourses[_selectedSemester!] ?? [],
-                                  isTablet: isTablet,
-                                  screenWidth: screenWidth,
+                child: Column(
+                  children: [
+                    isTablet
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 左邊課表區域
+                              Expanded(
+                                flex: 55,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    // 學期切換選擇器 (內含匯出按鈕)
+                                    _buildSemesterSelector(isTablet: isTablet),
+                                    const SizedBox(height: 16),
+                                    // 課表主體
+                                    _buildTimeTable(
+                                      _allCourses[_selectedSemester!] ?? [],
+                                      isTablet: isTablet,
+                                      screenWidth: screenWidth,
+                                    ),
+                                    const SizedBox(height: 32),
+                                  ],
                                 ),
-                                const SizedBox(height: 32),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 24),
+                              // 右邊詳細資料區域
+                              Expanded(
+                                flex: 45,
+                                child: Column(
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    _buildRightDetailsPane(isTablet: isTablet),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // 學期切換選擇器 (內含匯出按鈕)
+                              _buildSemesterSelector(isTablet: isTablet),
+                              // 課表主體 (移除 Expanded)
+                              _buildTimeTable(
+                                _allCourses[_selectedSemester!] ?? [],
+                                isTablet: isTablet,
+                                screenWidth: screenWidth,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 24),
-                          // 右邊詳細資料區域
-                          Expanded(
-                            flex: 45,
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 16),
-                                _buildRightDetailsPane(isTablet: isTablet),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // 學期切換選擇器 (內含匯出按鈕)
-                          _buildSemesterSelector(isTablet: isTablet),
-                          // 課表主體 (移除 Expanded)
-                          _buildTimeTable(
-                            _allCourses[_selectedSemester!] ?? [],
-                            isTablet: isTablet,
-                            screenWidth: screenWidth,
-                          ),
-                        ],
-                      ),
+                    if (LayoutStyleNotifier.instance.isLiquidGlass)
+                      const SizedBox(height: 100),
+                  ],
+                ),
               ),
             ),
     );
@@ -369,21 +383,19 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
     Clipboard.setData(ClipboardData(text: exportText)).then((_) {
       if (mounted) {
         // 顯示匯出成功與引導前往選課助手的彈窗
-        showDialog(
+        showGlassDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("匯出成功 🎉"),
-            content: const Text("課表代碼已複製到剪貼簿！\n\n你可以前往「選課助手」的頁面進行匯入操作。"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "我知道了",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+          title: const Text("匯出成功 🎉"),
+          content: const Text("課表代碼已複製到剪貼簿！\n\n你可以前往「選課助手」的頁面進行匯入操作。"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: const Text(
+                "我知道了",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       }
     });
@@ -517,6 +529,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
 
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.isDark;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     // 定義寬螢幕下的尺寸與字體大小優化 (使其更加精緻與緊湊)
     final double periodColWidth = maxDay > 5
@@ -554,16 +567,24 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
 
     Widget tableWidget = Table(
       border: TableBorder.all(
-        color: isDark ? colorScheme.borderColor : const Color(0xFFD0E2FF),
+        color: isLiquidGlass
+            ? (isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.35))
+            : (isDark ? colorScheme.borderColor : const Color(0xFFD0E2FF)),
         width: 0.5,
       ),
       columnWidths: {0: FixedColumnWidth(periodColWidth)},
       children: [
         TableRow(
           decoration: BoxDecoration(
-            color: isDark
-                ? colorScheme.secondaryCardBackground
-                : const Color(0xFFE8F0FE),
+            color: isLiquidGlass
+                ? (isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.white.withValues(alpha: 0.45))
+                : (isDark
+                      ? colorScheme.secondaryCardBackground
+                      : const Color(0xFFE8F0FE)),
           ),
           children: [
             SizedBox(
@@ -626,9 +647,13 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
               TableCell(
                 verticalAlignment: TableCellVerticalAlignment.fill,
                 child: Container(
-                  color: isDark
-                      ? colorScheme.cardBackground
-                      : const Color(0xFFF0F4FE),
+                  color: isLiquidGlass
+                      ? (isDark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : Colors.white.withValues(alpha: 0.45))
+                      : (isDark
+                            ? colorScheme.cardBackground
+                            : const Color(0xFFF0F4FE)),
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
@@ -674,9 +699,13 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
                   padding: const EdgeInsets.all(1),
                   child: cellCourse == null
                       ? Container(
-                          color: isDark
-                              ? Colors.transparent
-                              : const Color(0xFFF7FAFF),
+                          color: isLiquidGlass
+                              ? (isDark
+                                    ? Colors.transparent
+                                    : Colors.white.withValues(alpha: 0.15))
+                              : (isDark
+                                    ? Colors.transparent
+                                    : const Color(0xFFF7FAFF)),
                         )
                       : Material(
                           color: _getCourseColor(cellCourse.name),
@@ -768,7 +797,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
         decoration: BoxDecoration(
           color: colorScheme.cardBackground,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colorScheme.borderColor.withOpacity(0.5)),
+          border: Border.all(color: colorScheme.borderColor.withValues(alpha: 0.5)),
           boxShadow: [
             BoxShadow(
               color: isDark ? Colors.black26 : Colors.black12,
@@ -821,375 +850,392 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
       );
     }
 
-    final course = _selectedCourseForDetail!;
-    final prettyTime = _formatCourseTimeWithRange(course);
-    final courseColor = _getCourseColor(course.name);
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        final showReviewButton =
+            snapshot.data?.getBool('show_course_review_button') ?? false;
 
-    // Make a beautiful gradient using the course color
-    final gradient = LinearGradient(
-      colors: [
-        courseColor,
-        HSVColor.fromColor(courseColor)
-            .withValue(
-              (HSVColor.fromColor(courseColor).value * 0.82).clamp(0.0, 1.0),
-            )
-            .toColor(),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
+        final course = _selectedCourseForDetail!;
+        final prettyTime = _formatCourseTimeWithRange(course);
+        final courseColor = _getCourseColor(course.name);
 
-    // 尋找 API 中的系所與學程資訊
-    final normSchoolCode = _normalizeCode(course.code);
-    debugPrint(
-      "🔍 [比對偵錯-平板] 點擊課程: ${course.name}, 原始課號: '${course.code}', 規一化課號: '$normSchoolCode'",
-    );
-    debugPrint(
-      "🔍 [比對偵錯-平板] 當前 API 下載的課程總數: ${_apiCoursesNotifier.value.length}",
-    );
-
-    var apiCourseList = _apiCoursesNotifier.value
-        .where((e) => _matchCourseCodeExact(e.id, course.code))
-        .toList();
-    if (apiCourseList.isEmpty) {
-      apiCourseList = _apiCoursesNotifier.value
-          .where((e) => _matchCourseCodeFuzzy(e.id, course.code))
-          .toList();
-      if (apiCourseList.isNotEmpty) {
-        debugPrint(
-          "🔍 [比對偵錯-平板] 精確比對失敗，但模糊比對成功！匹配到: ${apiCourseList.map((e) => "${e.id}(${e.name.split('\n')[0]})").join(', ')}",
+        // Make a beautiful gradient using the course color
+        final gradient = LinearGradient(
+          colors: [
+            courseColor,
+            HSVColor.fromColor(courseColor)
+                .withValue(
+                  (HSVColor.fromColor(courseColor).value * 0.82).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                )
+                .toColor(),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         );
-      }
-    } else {
-      debugPrint(
-        "🔍 [比對偵錯-平板] 精確比對成功！匹配到: ${apiCourseList.first.id}(${apiCourseList.first.name.split('\n')[0]})",
-      );
-    }
 
-    if (apiCourseList.isEmpty && _apiCoursesNotifier.value.isNotEmpty) {
-      debugPrint(
-        "❌ [比對偵錯-平板] 完全找不到匹配課程！API 內前 10 筆課程代碼範例: ${_apiCoursesNotifier.value.take(10).map((e) => e.id).join(', ')}",
-      );
-    }
+        // 尋找 API 中的系所與學程資訊
+        final normSchoolCode = _normalizeCode(course.code);
+        debugPrint(
+          "🔍 [比對偵錯-平板] 點擊課程: ${course.name}, 原始課號: '${course.code}', 規一化課號: '$normSchoolCode'",
+        );
+        debugPrint(
+          "🔍 [比對偵錯-平板] 當前 API 下載的課程總數: ${_apiCoursesNotifier.value.length}",
+        );
 
-    final CourseJsonData? apiCourse = apiCourseList.isNotEmpty
-        ? apiCourseList.first
-        : null;
-    final hasApiData = apiCourse != null;
-    final departmentText = hasApiData ? apiCourse.department : "未指定";
-    final List<String> tags = hasApiData ? apiCourse.tags : [];
+        var apiCourseList = _apiCoursesNotifier.value
+            .where((e) => _matchCourseCodeExact(e.id, course.code))
+            .toList();
+        if (apiCourseList.isEmpty) {
+          apiCourseList = _apiCoursesNotifier.value
+              .where((e) => _matchCourseCodeFuzzy(e.id, course.code))
+              .toList();
+          if (apiCourseList.isNotEmpty) {
+            debugPrint(
+              "🔍 [比對偵錯-平板] 精確比對失敗，但模糊比對成功！匹配到: ${apiCourseList.map((e) => "${e.id}(${e.name.split('\n')[0]})").join(', ')}",
+            );
+          }
+        } else {
+          debugPrint(
+            "🔍 [比對偵錯-平板] 精確比對成功！匹配到: ${apiCourseList.first.id}(${apiCourseList.first.name.split('\n')[0]})",
+          );
+        }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black26 : Colors.black12,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+        if (apiCourseList.isEmpty && _apiCoursesNotifier.value.isNotEmpty) {
+          debugPrint(
+            "❌ [比對偵錯-平板] 完全找不到匹配課程！API 內前 10 筆課程代碼範例: ${_apiCoursesNotifier.value.take(10).map((e) => e.id).join(', ')}",
+          );
+        }
+
+        final CourseJsonData? apiCourse = apiCourseList.isNotEmpty
+            ? apiCourseList.first
+            : null;
+        final hasApiData = apiCourse != null;
+        final departmentText = hasApiData ? apiCourse.department : "未指定";
+        final List<String> tags = hasApiData ? apiCourse.tags : [];
+
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black26 : Colors.black12,
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.borderColor.withOpacity(0.5)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 精緻頂部 Banner (使用漸層)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            decoration: BoxDecoration(gradient: gradient),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    course.code,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.borderColor.withValues(alpha: 0.5)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 精緻頂部 Banner (使用漸層)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
                 ),
-                const SizedBox(height: 12),
-                // 中英文分離標題
-                (() {
-                  final nameParts = _splitCourseName(course.name);
-                  final chineseName = nameParts["chinese"]!;
-                  final englishName = nameParts["english"]!;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        chineseName,
+                decoration: BoxDecoration(gradient: gradient),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        course.code,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          height: 1.2,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                      if (englishName.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          englishName,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 13,
-                            fontWeight: FontWeight.normal,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                })(),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 收集有資料的欄位
-                (() {
-                  final List<Widget> detailRows = [];
-
-                  // 1. 學分與選別
-                  final showCredits =
-                      course.credits.isNotEmpty || course.required.isNotEmpty;
-                  if (showCredits) {
-                    detailRows.add(
-                      _buildModernDetailRow(
-                        icon: Icons.stars_rounded,
-                        iconColor: Colors.deepPurpleAccent,
-                        label: "學分與選別",
-                        content: Text(
-                          "${course.credits}學分 (${course.required})",
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // 2. 教授
-                  final showProfessor =
-                      course.professor.isNotEmpty &&
-                      course.professor != "未指定" &&
-                      course.professor != "未提供";
-                  if (showProfessor) {
-                    detailRows.add(
-                      _buildModernDetailRow(
-                        icon: Icons.person_rounded,
-                        iconColor: Colors.orange,
-                        label: "授課教授",
-                        content: Text(
-                          course.professor,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // 3. 地點
-                  final locationText = _extractLocation(course.location);
-                  final showLocation =
-                      locationText.isNotEmpty &&
-                      locationText != "未指定" &&
-                      locationText != "無教室資料" &&
-                      locationText != "無上課地點資料";
-                  if (showLocation) {
-                    detailRows.add(
-                      _buildModernDetailRow(
-                        icon: Icons.location_on_rounded,
-                        iconColor: Colors.redAccent,
-                        label: "上課教室",
-                        content: Text(
-                          locationText,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // 4. 系所 (從 API 抓取)
-                  final showDepartment =
-                      _isApiLoadingNotifier.value ||
-                      (hasApiData &&
-                          departmentText.isNotEmpty &&
-                          departmentText != "未指定" &&
-                          departmentText != "未提供");
-                  if (showDepartment) {
-                    detailRows.add(
-                      _buildModernDetailRow(
-                        icon: Icons.business_rounded,
-                        iconColor: Colors.blueAccent,
-                        label: "開課系所",
-                        isLoading: _isApiLoadingNotifier.value,
-                        content: Text(
-                          departmentText,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // 5. 學程 (從 API 抓取)
-                  final showTags =
-                      _isApiLoadingNotifier.value ||
-                      (hasApiData && tags.isNotEmpty);
-                  if (showTags) {
-                    detailRows.add(
-                      _buildModernDetailRow(
-                        icon: Icons.school_rounded,
-                        iconColor: Colors.teal,
-                        label: "適用學程",
-                        isLoading: _isApiLoadingNotifier.value,
-                        content: Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: tags
-                                .map(
-                                  (tag) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.teal.withOpacity(
-                                        isDark ? 0.15 : 0.08,
-                                      ),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: Colors.teal.withOpacity(
-                                          isDark ? 0.3 : 0.2,
-                                        ),
-                                        width: 0.8,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      tag,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.teal[200]
-                                            : Colors.teal[800],
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (detailRows.isNotEmpty) ...[
-                        for (int i = 0; i < detailRows.length; i++) ...[
-                          detailRows[i],
-                          if (i < detailRows.length - 1)
-                            const Divider(height: 1),
-                        ],
-                      ],
-                    ],
-                  );
-                })(),
-                const SizedBox(height: 24),
-                // 6. 上課時間區塊
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? colorScheme.secondaryCardBackground
-                        : Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: colorScheme.borderColor.withOpacity(0.5),
-                      width: 0.8,
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    const SizedBox(height: 12),
+                    // 中英文分離標題
+                    (() {
+                      final nameParts = _splitCourseName(course.name);
+                      final chineseName = nameParts["chinese"]!;
+                      final englishName = nameParts["english"]!;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.access_time_filled_rounded,
-                            size: 18,
-                            color: colorScheme.accentBlue,
-                          ),
-                          const SizedBox(width: 8),
                           Text(
-                            "上課時間與節次",
-                            style: TextStyle(
+                            chineseName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                          ),
+                          if (englishName.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              englishName,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 13,
+                                fontWeight: FontWeight.normal,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    })(),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 收集有資料的欄位
+                    (() {
+                      final List<Widget> detailRows = [];
+
+                      // 1. 學分與選別
+                      final showCredits =
+                          course.credits.isNotEmpty ||
+                          course.required.isNotEmpty;
+                      if (showCredits) {
+                        detailRows.add(
+                          _buildModernDetailRow(
+                            icon: Icons.stars_rounded,
+                            iconColor: Colors.deepPurpleAccent,
+                            label: "學分與選別",
+                            content: Text(
+                              "${course.credits}學分 (${course.required})",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primaryText,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 2. 教授
+                      final showProfessor =
+                          course.professor.isNotEmpty &&
+                          course.professor != "未指定" &&
+                          course.professor != "未提供";
+                      if (showProfessor) {
+                        detailRows.add(
+                          _buildModernDetailRow(
+                            icon: Icons.person_rounded,
+                            iconColor: Colors.orange,
+                            label: "授課教授",
+                            content: Text(
+                              course.professor,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primaryText,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 3. 地點
+                      final locationText = _extractLocation(course.location);
+                      final showLocation =
+                          locationText.isNotEmpty &&
+                          locationText != "未指定" &&
+                          locationText != "無教室資料" &&
+                          locationText != "無上課地點資料";
+                      if (showLocation) {
+                        detailRows.add(
+                          _buildModernDetailRow(
+                            icon: Icons.location_on_rounded,
+                            iconColor: Colors.redAccent,
+                            label: "上課教室",
+                            content: Text(
+                              locationText,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primaryText,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 4. 系所 (從 API 抓取)
+                      final showDepartment =
+                          _isApiLoadingNotifier.value ||
+                          (hasApiData &&
+                              departmentText.isNotEmpty &&
+                              departmentText != "未指定" &&
+                              departmentText != "未提供");
+                      if (showDepartment) {
+                        detailRows.add(
+                          _buildModernDetailRow(
+                            icon: Icons.business_rounded,
+                            iconColor: Colors.blueAccent,
+                            label: "開課系所",
+                            isLoading: _isApiLoadingNotifier.value,
+                            content: Text(
+                              departmentText,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primaryText,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // 5. 學程 (從 API 抓取)
+                      final showTags =
+                          _isApiLoadingNotifier.value ||
+                          (hasApiData && tags.isNotEmpty);
+                      if (showTags) {
+                        detailRows.add(
+                          _buildModernDetailRow(
+                            icon: Icons.school_rounded,
+                            iconColor: Colors.teal,
+                            label: "適用學程",
+                            isLoading: _isApiLoadingNotifier.value,
+                            content: Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: tags
+                                    .map(
+                                      (tag) => Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.teal.withValues(alpha: 
+                                            isDark ? 0.15 : 0.08,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.teal.withValues(alpha: 
+                                              isDark ? 0.3 : 0.2,
+                                            ),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.teal[200]
+                                                : Colors.teal[800],
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (detailRows.isNotEmpty) ...[
+                            for (int i = 0; i < detailRows.length; i++) ...[
+                              detailRows[i],
+                              if (i < detailRows.length - 1)
+                                const Divider(height: 1),
+                            ],
+                          ],
+                        ],
+                      );
+                    })(),
+                    const SizedBox(height: 24),
+                    // 6. 上課時間區塊
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? colorScheme.secondaryCardBackground
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colorScheme.borderColor.withValues(alpha: 0.5),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.access_time_filled_rounded,
+                                size: 18,
+                                color: colorScheme.accentBlue,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                "上課時間與節次",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: isDark
+                                      ? colorScheme.primaryText
+                                      : Colors.blueGrey[800],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            prettyTime,
+                            style: TextStyle(
                               fontSize: 14,
-                              color: isDark
-                                  ? colorScheme.primaryText
-                                  : Colors.blueGrey[800],
+                              color: colorScheme.primaryText,
+                              height: 1.5,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        prettyTime,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: colorScheme.primaryText,
-                          height: 1.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1212,7 +1258,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(isDark ? 0.15 : 0.08),
+              color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 18),
@@ -1240,7 +1286,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
                           width: 80,
                           child: LinearProgressIndicator(
                             color: iconColor,
-                            backgroundColor: iconColor.withOpacity(0.1),
+                            backgroundColor: iconColor.withValues(alpha: 0.1),
                             minHeight: 2.5,
                           ),
                         ),
@@ -1279,354 +1325,523 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
 
     showDialog(
       context: context,
-      builder: (context) => ValueListenableBuilder<bool>(
-        valueListenable: _isApiLoadingNotifier,
-        builder: (context, isApiLoading, child) {
-          return ValueListenableBuilder<List<CourseJsonData>>(
-            valueListenable: _apiCoursesNotifier,
-            builder: (context, apiCourses, child) {
-              // 尋找 API 中的系所與學程資訊
-              final normSchoolCode = _normalizeCode(course.code);
-              // debugPrint("🔍 [比對偵錯-手機] 點擊課程: ${course.name}, 原始課號: '${course.code}', 規一化課號: '$normSchoolCode'",);
-              // debugPrint("🔍 [比對偵錯-手機] 當前 API 下載的課程總數: ${apiCourses.length}");
+      builder: (context) => FutureBuilder<SharedPreferences>(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: _isApiLoadingNotifier,
+            builder: (context, isApiLoading, child) {
+              return ValueListenableBuilder<List<CourseJsonData>>(
+                valueListenable: _apiCoursesNotifier,
+                builder: (context, apiCourses, child) {
+                  // 尋找 API 中的系所與學程資訊
+                  final normSchoolCode = _normalizeCode(course.code);
+                  // debugPrint("🔍 [比對偵錯-手機] 點擊課程: ${course.name}, 原始課號: '${course.code}', 規一化課號: '$normSchoolCode'",);
+                  // debugPrint("🔍 [比對偵錯-手機] 當前 API 下載的課程總數: ${apiCourses.length}");
 
-              var apiCourseList = apiCourses
-                  .where((e) => _matchCourseCodeExact(e.id, course.code))
-                  .toList();
-              if (apiCourseList.isEmpty) {
-                apiCourseList = apiCourses
-                    .where((e) => _matchCourseCodeFuzzy(e.id, course.code))
-                    .toList();
-                // if (apiCourseList.isNotEmpty) {
-                //   debugPrint("🔍 [比對偵錯-手機] 精確比對失敗，但模糊比對成功！匹配到: ${apiCourseList.map((e) => "${e.id}(${e.name.split('\n')[0]})").join(', ')}",);
-                // }
-              } else {
-                // debugPrint("🔍 [比對偵錯-手機] 精確比對成功！匹配到: ${apiCourseList.first.id}(${apiCourseList.first.name.split('\n')[0]})",);
-              }
+                  var apiCourseList = apiCourses
+                      .where((e) => _matchCourseCodeExact(e.id, course.code))
+                      .toList();
+                  if (apiCourseList.isEmpty) {
+                    apiCourseList = apiCourses
+                        .where((e) => _matchCourseCodeFuzzy(e.id, course.code))
+                        .toList();
+                    // if (apiCourseList.isNotEmpty) {
+                    //   debugPrint("🔍 [比對偵錯-手機] 精確比對失敗，但模糊比對成功！匹配到: ${apiCourseList.map((e) => "${e.id}(${e.name.split('\n')[0]})").join(', ')}",);
+                    // }
+                  } else {
+                    // debugPrint("🔍 [比對偵錯-手機] 精確比對成功！匹配到: ${apiCourseList.first.id}(${apiCourseList.first.name.split('\n')[0]})",);
+                  }
 
-              if (apiCourseList.isEmpty && apiCourses.isNotEmpty) {
-                debugPrint(
-                  "❌ [比對偵錯-手機] 完全找不到匹配課程！API 內前 10 筆課程代碼範例: ${apiCourses.take(10).map((e) => e.id).join(', ')}",
-                );
-              }
+                  if (apiCourseList.isEmpty && apiCourses.isNotEmpty) {
+                    debugPrint(
+                      "❌ [比對偵錯-手機] 完全找不到匹配課程！API 內前 10 筆課程代碼範例: ${apiCourses.take(10).map((e) => e.id).join(', ')}",
+                    );
+                  }
 
-              final CourseJsonData? apiCourse = apiCourseList.isNotEmpty
-                  ? apiCourseList.first
-                  : null;
-              final hasApiData = apiCourse != null;
-              final departmentText = hasApiData ? apiCourse.department : "未指定";
-              final List<String> tags = hasApiData ? apiCourse.tags : [];
+                  final CourseJsonData? apiCourse = apiCourseList.isNotEmpty
+                      ? apiCourseList.first
+                      : null;
+                  final hasApiData = apiCourse != null;
+                  final departmentText = hasApiData
+                      ? apiCourse.department
+                      : "未指定";
+                  final List<String> tags = hasApiData ? apiCourse.tags : [];
 
-              // 中英文分離標題
-              final nameParts = _splitCourseName(course.name);
-              final chineseName = nameParts["chinese"]!;
-              final englishName = nameParts["english"]!;
+                  // 中英文分離標題
+                  final nameParts = _splitCourseName(course.name);
+                  final chineseName = nameParts["chinese"]!;
+                  final englishName = nameParts["english"]!;
 
-              return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                clipBehavior: Clip.antiAlias,
-                titlePadding: EdgeInsets.zero,
-                title: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 20,
-                  ),
-                  decoration: BoxDecoration(gradient: gradient),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          course.code,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        chineseName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          height: 1.3,
-                        ),
-                      ),
-                      if (englishName.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          englishName,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 12,
-                            fontWeight: FontWeight.normal,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                content: Container(
-                  width: isTablet ? 500 : double.maxFinite,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 收集有資料的欄位
-                        (() {
-                          final List<Widget> detailRows = [];
+                  final isLiquidGlass =
+                      LayoutStyleNotifier.instance.isLiquidGlass;
 
-                          // 1. 學分與選別
-                          final showCredits =
-                              course.credits.isNotEmpty ||
-                              course.required.isNotEmpty;
-                          if (showCredits) {
-                            detailRows.add(
-                              _buildModernDetailRow(
-                                icon: Icons.stars_rounded,
-                                iconColor: Colors.deepPurpleAccent,
-                                label: "學分與選別",
-                                content: Text(
-                                  "${course.credits}學分 (${course.required})",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.primaryText,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
+                  final contentWidget = Container(
+                    width: isTablet ? 500 : double.maxFinite,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 收集有資料的欄位
+                          (() {
+                            final List<Widget> detailRows = [];
 
-                          // 2. 教授
-                          final showProfessor =
-                              course.professor.isNotEmpty &&
-                              course.professor != "未指定" &&
-                              course.professor != "未提供";
-                          if (showProfessor) {
-                            detailRows.add(
-                              _buildModernDetailRow(
-                                icon: Icons.person_rounded,
-                                iconColor: Colors.orange,
-                                label: "授課教授",
-                                content: Text(
-                                  course.professor,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.primaryText,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          // 3. 地點
-                          final locationText = _extractLocation(
-                            course.location,
-                          );
-                          final showLocation =
-                              locationText.isNotEmpty &&
-                              locationText != "未指定" &&
-                              locationText != "無教室資料" &&
-                              locationText != "無上課地點資料";
-                          if (showLocation) {
-                            detailRows.add(
-                              _buildModernDetailRow(
-                                icon: Icons.location_on_rounded,
-                                iconColor: Colors.redAccent,
-                                label: "上課教室",
-                                content: Text(
-                                  locationText,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.primaryText,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          // 4. 系所 (從 API 抓取)
-                          final showDepartment =
-                              isApiLoading ||
-                              (hasApiData &&
-                                  departmentText.isNotEmpty &&
-                                  departmentText != "未指定" &&
-                                  departmentText != "未提供");
-                          if (showDepartment) {
-                            detailRows.add(
-                              _buildModernDetailRow(
-                                icon: Icons.business_rounded,
-                                iconColor: Colors.blueAccent,
-                                label: "開課系所",
-                                isLoading: isApiLoading,
-                                content: Text(
-                                  departmentText,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.primaryText,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          // 5. 學程 (從 API 抓取)
-                          final showTags =
-                              isApiLoading || (hasApiData && tags.isNotEmpty);
-                          if (showTags) {
-                            detailRows.add(
-                              _buildModernDetailRow(
-                                icon: Icons.school_rounded,
-                                iconColor: Colors.teal,
-                                label: "適用學程",
-                                isLoading: isApiLoading,
-                                content: Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: tags
-                                        .map(
-                                          (tag) => Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.teal.withOpacity(
-                                                isDark ? 0.15 : 0.08,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: Colors.teal.withOpacity(
-                                                  isDark ? 0.3 : 0.2,
-                                                ),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              tag,
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? Colors.teal[200]
-                                                    : Colors.teal[800],
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (detailRows.isNotEmpty) ...[
-                                for (int i = 0; i < detailRows.length; i++) ...[
-                                  detailRows[i],
-                                  if (i < detailRows.length - 1)
-                                    const Divider(height: 1),
-                                ],
-                              ],
-                            ],
-                          );
-                        })(),
-                        const SizedBox(height: 16),
-                        // 6. 上課時間區塊
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? colorScheme.secondaryCardBackground
-                                : Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: colorScheme.borderColor.withOpacity(0.5),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.access_time_filled_rounded,
-                                    size: 16,
-                                    color: colorScheme.accentBlue,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "上課時間與節次",
+                            // 1. 學分與選別
+                            final showCredits =
+                                course.credits.isNotEmpty ||
+                                course.required.isNotEmpty;
+                            if (showCredits) {
+                              detailRows.add(
+                                _buildModernDetailRow(
+                                  icon: Icons.stars_rounded,
+                                  iconColor: Colors.deepPurpleAccent,
+                                  label: "學分與選別",
+                                  content: Text(
+                                    "${course.credits}學分 (${course.required})",
                                     style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: isDark
-                                          ? colorScheme.primaryText
-                                          : Colors.blueGrey[800],
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primaryText,
                                     ),
                                   ),
+                                ),
+                              );
+                            }
+
+                            // 2. 教授
+                            final showProfessor =
+                                course.professor.isNotEmpty &&
+                                course.professor != "未指定" &&
+                                course.professor != "未提供";
+                            if (showProfessor) {
+                              detailRows.add(
+                                _buildModernDetailRow(
+                                  icon: Icons.person_rounded,
+                                  iconColor: Colors.orange,
+                                  label: "授課教授",
+                                  content: Text(
+                                    course.professor,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primaryText,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // 3. 地點
+                            final locationText = _extractLocation(
+                              course.location,
+                            );
+                            final showLocation =
+                                locationText.isNotEmpty &&
+                                locationText != "未指定" &&
+                                locationText != "無教室資料" &&
+                                locationText != "無上課地點資料";
+                            if (showLocation) {
+                              detailRows.add(
+                                _buildModernDetailRow(
+                                  icon: Icons.location_on_rounded,
+                                  iconColor: Colors.redAccent,
+                                  label: "上課教室",
+                                  content: Text(
+                                    locationText,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primaryText,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // 4. 系所 (從 API 抓取)
+                            final showDepartment =
+                                isApiLoading ||
+                                (hasApiData &&
+                                    departmentText.isNotEmpty &&
+                                    departmentText != "未指定" &&
+                                    departmentText != "未提供");
+                            if (showDepartment) {
+                              detailRows.add(
+                                _buildModernDetailRow(
+                                  icon: Icons.business_rounded,
+                                  iconColor: Colors.blueAccent,
+                                  label: "開課系所",
+                                  isLoading: isApiLoading,
+                                  content: Text(
+                                    departmentText,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primaryText,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // 5. 學程 (從 API 抓取)
+                            final showTags =
+                                isApiLoading || (hasApiData && tags.isNotEmpty);
+                            if (showTags) {
+                              detailRows.add(
+                                _buildModernDetailRow(
+                                  icon: Icons.school_rounded,
+                                  iconColor: Colors.teal,
+                                  label: "適用學程",
+                                  isLoading: isApiLoading,
+                                  content: Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: tags
+                                          .map(
+                                            (tag) => Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.teal.withValues(alpha: 
+                                                  isDark ? 0.15 : 0.08,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                                border: Border.all(
+                                                  color: Colors.teal
+                                                      .withValues(alpha: 
+                                                        isDark ? 0.3 : 0.2,
+                                                      ),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                tag,
+                                                style: TextStyle(
+                                                  color: isDark
+                                                      ? Colors.teal[200]
+                                                      : Colors.teal[800],
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (detailRows.isNotEmpty) ...[
+                                  for (
+                                    int i = 0;
+                                    i < detailRows.length;
+                                    i++
+                                  ) ...[
+                                    detailRows[i],
+                                    if (i < detailRows.length - 1)
+                                      const Divider(height: 1),
+                                  ],
                                 ],
+                              ],
+                            );
+                          })(),
+                          const SizedBox(height: 16),
+                          // 6. 上課時間區塊
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isLiquidGlass
+                                  ? (isDark
+                                        ? Colors.white.withValues(alpha: 0.04)
+                                        : Colors.white.withValues(alpha: 0.35))
+                                  : (isDark
+                                        ? colorScheme.secondaryCardBackground
+                                        : Colors.grey.shade50),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isLiquidGlass
+                                    ? (isDark
+                                          ? Colors.white.withValues(alpha: 0.1)
+                                          : Colors.white.withValues(alpha: 0.35))
+                                    : colorScheme.borderColor.withValues(alpha: 0.5),
+                                width: 0.8,
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                prettyTime,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: colorScheme.primaryText,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w500,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.access_time_filled_rounded,
+                                      size: 16,
+                                      color: colorScheme.accentBlue,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "上課時間與節次",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: isDark
+                                            ? colorScheme.primaryText
+                                            : Colors.blueGrey[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  prettyTime,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colorScheme.primaryText,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+
+                  if (isLiquidGlass) {
+                    return Dialog(
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      insetPadding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 40,
+                      ),
+                      child: Container(
+                        width: isTablet ? 500 : double.maxFinite,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1C2333).withValues(alpha: 0.92)
+                              : Colors.white.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.18)
+                                : Colors.white.withValues(alpha: 0.70),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 
+                                isDark ? 0.45 : 0.15,
+                              ),
+                              blurRadius: 28,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(19),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Title
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 20,
+                                ),
+                                decoration: BoxDecoration(gradient: gradient),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        course.code,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      chineseName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                    if (englishName.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        englishName,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.85),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.normal,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              // Content
+                              Flexible(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    10,
+                                    20,
+                                    10,
+                                  ),
+                                  child: contentWidget,
+                                ),
+                              ),
+                              // Actions
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  0,
+                                  20,
+                                  16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: Text(
+                                        "關閉",
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? colorScheme.primary
+                                              : null,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
+                      ),
+                    );
+                  }
+
+                  return AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      "關閉",
-                      style: TextStyle(
-                        color: isDark ? colorScheme.primary : null,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                    clipBehavior: Clip.antiAlias,
+                    titlePadding: EdgeInsets.zero,
+                    title: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 20,
+                      ),
+                      decoration: BoxDecoration(gradient: gradient),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              course.code,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            chineseName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              height: 1.3,
+                            ),
+                          ),
+                          if (englishName.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              englishName,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 12,
+                                fontWeight: FontWeight.normal,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                    content: contentWidget,
+                    actions: [
+                      Row(
+                        children: [
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              "關閉",
+                              style: TextStyle(
+                                color: isDark ? colorScheme.primary : null,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
               );
             },
           );
@@ -1638,7 +1853,7 @@ class _CourseSchedulePageState extends State<CourseSchedulePage> {
   String keepUntilLastChinese(String input) {
     final RegExp chineseRegex = RegExp(r'[\u4e00-\u9fa5]');
     final Iterable<Match> matches = chineseRegex.allMatches(input);
-    if (matches.isEmpty) return "";
+    if (matches.isEmpty) return input.split('\n')[0];
     int lastIndex = matches.last.end;
     String prefix = input.substring(0, lastIndex);
 

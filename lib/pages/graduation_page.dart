@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/graduation_model.dart';
 import '../services/graduation_service.dart';
 import '../services/historical_score_service.dart';
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_dialog.dart';
 
 class GraduationPage extends StatefulWidget {
   const GraduationPage({Key? key}) : super(key: key);
@@ -62,6 +67,8 @@ class _GraduationPageState extends State<GraduationPage> {
 
   Future<void> _handleRefresh() async {
     if (_isRefreshing) return;
+    // 離線模式:跳對話框,不觸發 _dataFuture 更新,保留 FutureBuilder 上一個快取
+    if (await OfflineErrorHandler.handleRefresh(context)) return;
 
     setState(() {
       _isRefreshing = true;
@@ -74,7 +81,7 @@ class _GraduationPageState extends State<GraduationPage> {
     try {
       await _dataFuture;
     } catch (e) {
-      // 錯誤處理 (視需求加入)
+      // 離線已在上面 gate 擋住,這裡只處理其他網路錯誤
       debugPrint("Refresh error: $e");
     } finally {
       // 確保在 Widget 還存在時更新狀態
@@ -91,7 +98,7 @@ class _GraduationPageState extends State<GraduationPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 750;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("畢業檢核"),
         centerTitle: true,
@@ -225,7 +232,9 @@ class _GraduationPageState extends State<GraduationPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 30), // 留白，避免文字太貼手機底部
+                    SizedBox(
+                      height: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 30,
+                    ), // 留白，避免文字太貼手機底部
                   ],
                 ),
               ),
@@ -313,6 +322,258 @@ class _GraduationPageState extends State<GraduationPage> {
   }
 
   void _showGPADialog(GPABreakdown breakdown) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= 700;
+
+    Widget buildFormulaContainer(ColorScheme colorScheme) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.secondaryCardBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colorScheme.borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "計算公式",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: colorScheme.primaryText,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "總平均 GPA = 累計加權點數 / GPA 採計總學分\n"
+              "單科加權點數 = 單科等第點數 (GP) × 該科學分數\n\n"
+              "※ 只採計有等第點數的科目，排除「抵免」、無成績與「(P)」等科目。",
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.subtitleText,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildStatsRow(ColorScheme colorScheme) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildDialogStat(
+            "總平均 GPA",
+            breakdown.cumulativeGPA.toStringAsFixed(2),
+            colorScheme.accentBlue,
+          ),
+          _buildDialogStat(
+            "累計加權點數",
+            breakdown.totalWeightedPoints.toStringAsFixed(1),
+            colorScheme.primaryText,
+          ),
+          _buildDialogStat(
+            "採計總學分",
+            breakdown.totalGPACredits.toInt().toString(),
+            colorScheme.primaryText,
+          ),
+        ],
+      );
+    }
+
+    Widget buildStatsColumn(ColorScheme colorScheme) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildDialogStat(
+            "總平均 GPA",
+            breakdown.cumulativeGPA.toStringAsFixed(2),
+            colorScheme.accentBlue,
+          ),
+          const SizedBox(height: 12),
+          _buildDialogStat(
+            "累計加權點數",
+            breakdown.totalWeightedPoints.toStringAsFixed(1),
+            colorScheme.primaryText,
+          ),
+          const SizedBox(height: 12),
+          _buildDialogStat(
+            "採計總學分",
+            breakdown.totalGPACredits.toInt().toString(),
+            colorScheme.primaryText,
+          ),
+        ],
+      );
+    }
+
+    Widget buildDialogContent(BuildContext context, ColorScheme colorScheme, List<String> sortedSemesters) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isWide)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: buildFormulaContainer(colorScheme),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryCardBackground.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: colorScheme.borderColor.withValues(alpha: 0.5)),
+                      ),
+                      child: buildStatsColumn(colorScheme),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            buildFormulaContainer(colorScheme),
+            const SizedBox(height: 16),
+            buildStatsRow(colorScheme),
+          ],
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: colorScheme.isDark
+                  ? Colors.orange[900]!.withValues(alpha: 0.2)
+                  : Colors.orange[50]!,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.orange.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange[400]!,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "本系統試算結果僅供參考，實際學分採計與畢業審查資格請以學校教務處官方正式成績單與審查結果為準。",
+                    style: TextStyle(
+                      color: colorScheme.isDark
+                          ? Colors.orange[200]!
+                          : Colors.orange[800]!,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "各學期採計明細",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: colorScheme.primaryText,
+            ),
+          ),
+          const Divider(),
+          ...sortedSemesters.map((sem) {
+            final detail = breakdown.semesterBreakdown[sem]!;
+            final semGPA = detail.weightedPoints / detail.gpaCredits;
+            return Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "$sem",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.primaryText,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        "GPA: ${semGPA.toStringAsFixed(2)} (${detail.gpaCredits.toInt()} 學分)",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.subtitleText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                children: detail.courses.map((c) {
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      c.name,
+                      style: TextStyle(
+                        color: colorScheme.primaryText,
+                        fontSize: 13,
+                      ),
+                    ),
+                    subtitle: Text(
+                      "學分: ${c.credits} | 成績: ${c.score} | 等第點數 (GP): ${c.gp}",
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  );
+                }).toList(),
+              ),
+            );
+          }).toList(),
+        ],
+      );
+    }
+
+    if (LayoutStyleNotifier.instance.isLiquidGlass) {
+      showGlassDialog(
+        context: context,
+        maxWidth: isWide ? 600 : 340,
+        title: const Text("總平均 GPA 試算細節", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Builder(
+          builder: (context) {
+            final colorScheme = Theme.of(context).colorScheme;
+            final sortedSemesters = breakdown.semesterBreakdown.keys.toList()
+              ..sort((a, b) => b.compareTo(a));
+            return SingleChildScrollView(
+              child: buildDialogContent(context, colorScheme, sortedSemesters),
+            );
+          }
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+            child: const Text("關閉"),
+          ),
+        ],
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) {
@@ -344,169 +605,9 @@ class _GraduationPageState extends State<GraduationPage> {
             ],
           ),
           content: SizedBox(
-            width: 600,
+            width: isWide ? 600 : screenWidth - 80,
             child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryCardBackground,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: colorScheme.borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "計算公式",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "總平均 GPA = 累計加權點數 / GPA 採計總學分\n"
-                          "單科加權點數 = 單科等第點數 (GP) × 該科學分數\n\n"
-                          "※ 只採計有等第點數的科目，排除「抵免」、無成績與「(P)」等科目。",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: colorScheme.subtitleText,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildDialogStat(
-                        "總平均 GPA",
-                        breakdown.cumulativeGPA.toStringAsFixed(2),
-                        colorScheme.accentBlue,
-                      ),
-                      _buildDialogStat(
-                        "累計加權點數",
-                        breakdown.totalWeightedPoints.toStringAsFixed(1),
-                        colorScheme.primaryText,
-                      ),
-                      _buildDialogStat(
-                        "採計總學分",
-                        breakdown.totalGPACredits.toInt().toString(),
-                        colorScheme.primaryText,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.isDark
-                          ? Colors.orange[900]!.withValues(alpha: 0.2)
-                          : Colors.orange[50]!,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.orange.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.orange[400]!,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "本系統試算結果僅供參考，實際學分採計與畢業審查資格請以學校教務處官方正式成績單與審查結果為準。",
-                            style: TextStyle(
-                              color: colorScheme.isDark
-                                  ? Colors.orange[200]!
-                                  : Colors.orange[800]!,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "各學期採計明細",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: colorScheme.primaryText,
-                    ),
-                  ),
-                  const Divider(),
-                  ...sortedSemesters.map((sem) {
-                    final detail = breakdown.semesterBreakdown[sem]!;
-                    final semGPA = detail.weightedPoints / detail.gpaCredits;
-                    return Theme(
-                      data: Theme.of(
-                        context,
-                      ).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        title: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "$sem",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.primaryText,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                "GPA: ${semGPA.toStringAsFixed(2)} (${detail.gpaCredits.toInt()} 學分)",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colorScheme.subtitleText,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        children: detail.courses.map((c) {
-                          return ListTile(
-                            dense: true,
-                            title: Text(
-                              c.name,
-                              style: TextStyle(
-                                color: colorScheme.primaryText,
-                                fontSize: 13,
-                              ),
-                            ),
-                            subtitle: Text(
-                              "學分: ${c.credits} | 成績: ${c.score} | 等第點數 (GP): ${c.gp}",
-                              style: TextStyle(fontSize: 11),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  }).toList(),
-                ],
-              ),
+              child: buildDialogContent(context, colorScheme, sortedSemesters),
             ),
           ),
           actions: [
@@ -549,22 +650,38 @@ class _GraduationPageState extends State<GraduationPage> {
     final overallGPABreakdown = _getGPABreakdown();
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: colorScheme.secondaryCardBackground,
-            child: Text(
-              data.studentName.isNotEmpty ? data.studentName[0] : "生",
-              style: TextStyle(
-                color: colorScheme.accentBlue,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? Border.all(
+                      color: colorScheme.isDark
+                          ? Colors.white.withValues(alpha: 0.18)
+                          : Colors.white.withValues(alpha: 0.70),
+                      width: 1.2,
+                    )
+                  : null,
+            ),
+            child: CircleAvatar(
+              radius: 26,
+              backgroundColor: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? Colors.transparent
+                  : colorScheme.secondaryCardBackground,
+              child: Text(
+                data.studentName.isNotEmpty ? data.studentName[0] : "生",
+                style: TextStyle(
+                  color: colorScheme.accentBlue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ),
           ),
@@ -599,13 +716,14 @@ class _GraduationPageState extends State<GraduationPage> {
                     horizontal: 12,
                     vertical: 6,
                   ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.secondaryCardBackground,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: colorScheme.accentBlue.withValues(alpha: 0.4),
-                    ),
-                  ),
+                  decoration: glassCardDecoration(context, borderRadius: 8) ??
+                      BoxDecoration(
+                        color: colorScheme.secondaryCardBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: colorScheme.accentBlue.withValues(alpha: 0.4),
+                        ),
+                      ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -646,11 +764,12 @@ class _GraduationPageState extends State<GraduationPage> {
 
     return Container(
       padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -715,6 +834,9 @@ class _GraduationPageState extends State<GraduationPage> {
                     ? Colors.red[900]?.withValues(alpha: 0.2)
                     : Colors.red[50],
                 borderRadius: BorderRadius.circular(6),
+                border: LayoutStyleNotifier.instance.isLiquidGlass
+                    ? Border.all(color: Colors.red.withValues(alpha: 0.3))
+                    : null,
               ),
               child: Text(
                 "尚缺 ${data.minCredits - data.currentCredits} 學分",
@@ -733,206 +855,218 @@ class _GraduationPageState extends State<GraduationPage> {
   // 必修缺修卡片 (紅色警戒)
   Widget _buildMissingRequiredCard(GraduationData data) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.cardBackground,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.borderColor),
-      ),
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        leading: Icon(
-          Icons.warning_rounded,
-          color: colorScheme.isDark ? Colors.red[200] : Colors.red,
-        ),
-        title: Text(
-          "必修缺修",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
+    final decoration = glassCardDecoration(context, borderRadius: 12);
+    return Container(
+      decoration: decoration,
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: decoration != null
+            ? null
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: colorScheme.borderColor),
+              ),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          leading: Icon(
+            Icons.warning_rounded,
             color: colorScheme.isDark ? Colors.red[200] : Colors.red,
           ),
-        ),
-        children: data.missingRequiredCourses
-            .map(
-              (course) => ListTile(
-                dense: true,
-                leading: Icon(
-                  Icons.close,
-                  size: 16,
-                  color: colorScheme.isDark ? Colors.red[200] : Colors.red,
-                ),
-                title: Text(
-                  course,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: colorScheme.primaryText,
+          title: Text(
+            "必修缺修",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.isDark ? Colors.red[200] : Colors.red,
+            ),
+          ),
+          children: data.missingRequiredCourses
+              .map(
+                (course) => ListTile(
+                  dense: true,
+                  leading: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: colorScheme.isDark ? Colors.red[200] : Colors.red,
+                  ),
+                  title: Text(
+                    course,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colorScheme.primaryText,
+                    ),
                   ),
                 ),
-              ),
-            )
-            .toList(),
+              )
+              .toList(),
+        ),
       ),
     );
   }
 
   // 通識檢核
-
-  // 通識檢核
   Widget _buildGenEdCard(GraduationData data) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.cardBackground,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.borderColor),
-      ),
-      child: ExpansionTile(
-        title: Text(
-          "通識與畢業門檻",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.primaryText,
-          ),
-        ),
-        leading: const Icon(Icons.fact_check, color: Colors.teal),
-        children: data.genEdStatuses.map((item) {
-          bool isOk = item.status == "符合";
-
-          // 狀態標籤
-          Widget statusBadge = Container(
-            margin: const EdgeInsets.only(left: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: isOk
-                  ? (colorScheme.isDark
-                        ? Colors.green[900]?.withValues(alpha: 0.2)
-                        : Colors.green[50])
-                  : (colorScheme.isDark
-                        ? Colors.red[900]?.withValues(alpha: 0.2)
-                        : Colors.red[50]),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: isOk
-                    ? Colors.green.withValues(alpha: 0.3)
-                    : Colors.red.withValues(alpha: 0.3),
+    final decoration = glassCardDecoration(context, borderRadius: 12);
+    return Container(
+      decoration: decoration,
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: decoration != null
+            ? null
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: colorScheme.borderColor),
               ),
+        child: ExpansionTile(
+          title: Text(
+            "通識與畢業門檻",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primaryText,
             ),
-            child: Text(
-              item.status,
-              style: TextStyle(
+          ),
+          leading: const Icon(Icons.fact_check, color: Colors.teal),
+          children: data.genEdStatuses.map((item) {
+            bool isOk = item.status == "符合";
+
+            // 狀態標籤
+            Widget statusBadge = Container(
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
                 color: isOk
                     ? (colorScheme.isDark
-                          ? Colors.green[200]
-                          : Colors.green[700])
-                    : (colorScheme.isDark ? Colors.red[200] : Colors.red[700]),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+                          ? Colors.green[900]?.withValues(alpha: 0.2)
+                          : Colors.green[50])
+                    : (colorScheme.isDark
+                          ? Colors.red[900]?.withValues(alpha: 0.2)
+                          : Colors.red[50]),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: isOk
+                      ? Colors.green.withValues(alpha: 0.3)
+                      : Colors.red.withValues(alpha: 0.3),
+                ),
               ),
-            ),
-          );
+              child: Text(
+                item.status,
+                style: TextStyle(
+                  color: isOk
+                      ? (colorScheme.isDark
+                            ? Colors.green[200]
+                            : Colors.green[700])
+                      : (colorScheme.isDark ? Colors.red[200] : Colors.red[700]),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
 
-          // 判斷是否有子項目
-          if (item.details.isNotEmpty) {
-            // === 有子項目：使用 ExpansionTile ===
-            return ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 4,
-              ),
-              leading: Icon(
-                isOk ? Icons.check_circle : Icons.cancel,
-                color: isOk
-                    ? Colors.green
-                    : (colorScheme.isDark ? Colors.red[200] : Colors.redAccent),
-              ),
-              // 將狀態標籤放在 Title 旁邊
-              title: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      item.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colorScheme.primaryText),
-                    ),
-                  ),
-                  statusBadge,
-                ],
-              ),
-              subtitle: item.description.isNotEmpty
-                  ? Text(
-                      item.description,
-                      style: TextStyle(
-                        color: colorScheme.isDark
-                            ? Colors.red[200]
-                            : Colors.red,
-                        fontSize: 13,
+            // 判斷是否有子項目
+            if (item.details.isNotEmpty) {
+              // === 有子項目：使用 ExpansionTile ===
+              return ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                leading: Icon(
+                  isOk ? Icons.check_circle : Icons.cancel,
+                  color: isOk
+                      ? Colors.green
+                      : (colorScheme.isDark ? Colors.red[200] : Colors.redAccent),
+                ),
+                // 將狀態標籤放在 Title 旁邊
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        item.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colorScheme.primaryText),
                       ),
-                    )
-                  : null,
-              // 不設定 trailing，保留預設箭頭
-              children: item.details
-                  .map(
-                    (detail) => Container(
-                      color: colorScheme.secondaryCardBackground,
-                      child: ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.only(
-                          left: 56,
-                          right: 16,
+                    ),
+                    statusBadge,
+                  ],
+                ),
+                subtitle: item.description.isNotEmpty
+                    ? Text(
+                        item.description,
+                        style: TextStyle(
+                          color: colorScheme.isDark
+                              ? Colors.red[200]
+                              : Colors.red,
+                          fontSize: 13,
                         ),
-                        leading: Icon(
-                          Icons.subdirectory_arrow_right,
-                          size: 16,
-                          color: colorScheme.subtitleText,
-                        ),
-                        title: Text(
-                          detail,
-                          style: TextStyle(
-                            color: colorScheme.primaryText,
-                            fontSize: 14,
+                      )
+                    : null,
+                // 不設定 trailing，保留預設箭頭
+                children: item.details
+                    .map(
+                      (detail) => Container(
+                        color: LayoutStyleNotifier.instance.isLiquidGlass
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : colorScheme.secondaryCardBackground,
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.only(
+                            left: 56,
+                            right: 16,
+                          ),
+                          leading: Icon(
+                            Icons.subdirectory_arrow_right,
+                            size: 16,
+                            color: colorScheme.subtitleText,
+                          ),
+                          title: Text(
+                            detail,
+                            style: TextStyle(
+                              color: colorScheme.primaryText,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  )
-                  .toList(),
-            );
-          } else {
-            // === 無子項目：使用 ListTile ===
-            return ListTile(
-              dense: true,
-              leading: Icon(
-                isOk ? Icons.check_circle : Icons.cancel,
-                color: isOk
-                    ? Colors.green
-                    : (colorScheme.isDark ? Colors.red[200] : Colors.redAccent),
-              ),
-              title: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      item.name,
-                      style: TextStyle(color: colorScheme.primaryText),
-                    ),
-                  ),
-                  statusBadge,
-                ],
-              ),
-              subtitle: item.description.isNotEmpty
-                  ? Text(
-                      item.description,
-                      style: TextStyle(
-                        color: colorScheme.isDark
-                            ? Colors.red[200]
-                            : Colors.red,
-                      ),
                     )
-                  : null,
-            );
-          }
-        }).toList(),
+                    .toList(),
+              );
+            } else {
+              // === 無子項目：使用 ListTile ===
+              return ListTile(
+                dense: true,
+                leading: Icon(
+                  isOk ? Icons.check_circle : Icons.cancel,
+                  color: isOk
+                      ? Colors.green
+                      : (colorScheme.isDark ? Colors.red[200] : Colors.redAccent),
+                ),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        item.name,
+                        style: TextStyle(color: colorScheme.primaryText),
+                      ),
+                    ),
+                    statusBadge,
+                  ],
+                ),
+                subtitle: item.description.isNotEmpty
+                    ? Text(
+                        item.description,
+                        style: TextStyle(
+                          color: colorScheme.isDark
+                              ? Colors.red[200]
+                              : Colors.red,
+                        ),
+                      )
+                    : null,
+              );
+            }
+          }).toList(),
+        ),
       ),
     );
   }
@@ -940,46 +1074,52 @@ class _GraduationPageState extends State<GraduationPage> {
   // 選修列表
   Widget _buildElectivesCard(GraduationData data) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.cardBackground,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.borderColor),
-      ),
-      child: ExpansionTile(
-        title: Text(
-          "已修習選修 (${data.takenElectiveCourses.length})",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.primaryText,
-          ),
-        ),
-        leading: Icon(Icons.book, color: colorScheme.accentBlue),
-        children: [
-          SizedBox(
-            height: 250, // 限制高度，內部可捲動
-            child: ListView.separated(
-              itemCount: data.takenElectiveCourses.length,
-              separatorBuilder: (ctx, i) =>
-                  const Divider(height: 1, indent: 16, endIndent: 16),
-              itemBuilder: (ctx, i) {
-                return ListTile(
-                  dense: true,
-                  leading: Icon(
-                    Icons.bookmark_border,
-                    size: 18,
-                    color: colorScheme.subtitleText,
-                  ),
-                  title: Text(
-                    data.takenElectiveCourses[i],
-                    style: TextStyle(color: colorScheme.primaryText),
-                  ),
-                );
-              },
+    final decoration = glassCardDecoration(context, borderRadius: 12);
+    return Container(
+      decoration: decoration,
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: decoration != null
+            ? null
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: colorScheme.borderColor),
+              ),
+        child: ExpansionTile(
+          title: Text(
+            "已修習選修 (${data.takenElectiveCourses.length})",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primaryText,
             ),
           ),
-        ],
+          leading: Icon(Icons.book, color: colorScheme.accentBlue),
+          children: [
+            SizedBox(
+              height: 250, // 限制高度，內部可捲動
+              child: ListView.separated(
+                itemCount: data.takenElectiveCourses.length,
+                separatorBuilder: (ctx, i) =>
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                itemBuilder: (ctx, i) {
+                  return ListTile(
+                    dense: true,
+                    leading: Icon(
+                      Icons.bookmark_border,
+                      size: 18,
+                      color: colorScheme.subtitleText,
+                    ),
+                    title: Text(
+                      data.takenElectiveCourses[i],
+                      style: TextStyle(color: colorScheme.primaryText),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

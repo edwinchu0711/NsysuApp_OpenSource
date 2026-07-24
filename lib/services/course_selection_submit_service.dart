@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import '../utils/utils.dart'; // 確保你的 Utils 路徑正確
 import 'storage_service.dart';
 import 'package:flutter/foundation.dart';
+import 'http_client_factory.dart';
 
 enum TransactionType { add, drop }
 
@@ -59,7 +58,7 @@ class CourseSelectionSubmitService {
   CourseSelectionSubmitService._privateConstructor();
 
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   String? lastResponseHtml;
 

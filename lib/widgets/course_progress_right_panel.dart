@@ -11,6 +11,7 @@ import '../widgets/tag_details_widget.dart';
 import '../widgets/cross_dept_verification_widget.dart';
 import '../widgets/waiver_section_widget.dart';
 import '../widgets/group_card_widget.dart';
+import '../theme/layout_style_notifier.dart';
 
 class CourseProgressRightPanel extends StatefulWidget {
   final EligibilityResult? result;
@@ -215,7 +216,9 @@ class _CourseProgressRightPanelState extends State<CourseProgressRightPanel>
                   ),
                 ),
               ),
-              const SizedBox(height: 50),
+              SizedBox(
+                height: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 50,
+              ),
             ],
           ),
         ),

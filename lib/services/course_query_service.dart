@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'http_client_factory.dart';
 
 class CourseJsonData {
   final String id; // 科號 (T3)
@@ -14,6 +15,14 @@ class CourseJsonData {
   final String room; // 教室
   final String credit; // 學分
   final List<String> tags; // 學程
+  final bool english; // 英語授課
+  final int restrict; // 限收
+  final int select; // 已選 (本階段)
+  final int selected; // 已選 (總計)
+  final int remaining; // 餘額
+  final int multipleCompulsory; // 0=必修, 1=選修
+  final String description; // 備註
+  final bool compulsory; // true=必修, false=選修
 
   CourseJsonData({
     required this.id,
@@ -26,9 +35,28 @@ class CourseJsonData {
     required this.room,
     required this.credit,
     required this.tags,
-  });
+    required this.english,
+    required this.restrict,
+    required this.select,
+    required this.selected,
+    required this.remaining,
+    required this.multipleCompulsory,
+    required this.description,
+    bool? compulsory,
+  }) : this.compulsory = compulsory ?? (multipleCompulsory == 0);
 
   factory CourseJsonData.fromJson(Map<String, dynamic> json) {
+    bool compVal = false;
+    if (json['compulsory'] != null) {
+      if (json['compulsory'] is bool) {
+        compVal = json['compulsory'] as bool;
+      } else if (json['compulsory'] is num) {
+        compVal = (json['compulsory'] as num) == 1;
+      }
+    } else {
+      compVal = (json['multiple_compulsory'] ?? 0) == 0;
+    }
+
     return CourseJsonData(
       id: json['id'] ?? "",
       name: json['name'] ?? "",
@@ -40,6 +68,14 @@ class CourseJsonData {
       room: json['room'] ?? "",
       credit: json['credit'] ?? "",
       tags: List<String>.from(json['tags'] ?? []),
+      english: json['english'] ?? false,
+      restrict: json['restrict'] ?? 0,
+      select: json['select'] ?? 0,
+      selected: json['selected'] ?? 0,
+      remaining: json['remaining'] ?? 0,
+      multipleCompulsory: json['multiple_compulsory'] ?? 0,
+      description: json['description'] ?? "",
+      compulsory: compVal,
     );
   }
 }
@@ -57,7 +93,7 @@ class CourseQueryService {
 
   // 取得所有可選的學期清單
   Future<Map<String, dynamic>> getSemesters() async {
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final vRes = await client.get(
         Uri.parse(
@@ -84,7 +120,7 @@ class CourseQueryService {
     }
 
     // debugPrint("🔍 [課程API] 開始抓取課程資料...");
-    final client = http.Client();
+    final client = createHttpClient();
 
     try {
       String targetSem = semester ?? "";
@@ -137,6 +173,27 @@ class CourseQueryService {
     }
   }
 
+  // 輔助方法：將字串大小寫不影響、全形轉半形、移除空白及標點符號
+  String _normalize(String input) {
+    var sb = StringBuffer();
+    for (var i = 0; i < input.length; i++) {
+      var code = input.codeUnitAt(i);
+      // 全形轉半形
+      if (code >= 0xFF01 && code <= 0xFF5E) {
+        sb.writeCharCode(code - 0xfee0);
+      } else if (code == 0x3000) {
+        sb.writeCharCode(0x0020);
+      } else {
+        sb.write(input[i]);
+      }
+    }
+    return sb
+        .toString()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9一-龥]'), '');
+  }
+
   // 搜尋邏輯
   List<CourseJsonData> search({
     String? keyword, // 課名
@@ -152,9 +209,12 @@ class CourseQueryService {
 
     return _cachedCourses
         .where((course) {
-          // 1. 課名 (模糊)
+          // 1. 課名 (模糊，不區分大小寫、全形轉半形、無視標點與空格，且僅搜尋顯示的第一行)
           if (keyword != null && keyword.isNotEmpty) {
-            if (!course.name.contains(keyword)) return false;
+            final displayName = course.name.split('\n')[0];
+            final normalizedCourse = _normalize(displayName);
+            final normalizedKeyword = _normalize(keyword);
+            if (!normalizedCourse.contains(normalizedKeyword)) return false;
           }
           // 2. 老師 (模糊)
           if (teacher != null && teacher.isNotEmpty) {

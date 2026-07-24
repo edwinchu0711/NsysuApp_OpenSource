@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../services/course_query_service.dart'; // 請確認路徑是否正確
 import 'package:http/http.dart' as http;
 import '../../theme/app_theme.dart'; // 引入 AppTheme 與 AppColors 擴充
-import '../../widgets/glass_dropdown.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_dropdown.dart';
+import '../../widgets/glass/glass_card.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_bottom_sheet.dart';
+import '../../services/http_client_factory.dart';
 
 class CourseSearchPickerPage extends StatefulWidget {
   const CourseSearchPickerPage({Key? key}) : super(key: key);
@@ -47,24 +52,32 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
     }
 
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
 
-    return Scaffold(
+    return GlassPageScaffold(
       backgroundColor: colorScheme.pageBackground,
       appBar: AppBar(
         title: Text(
           "$semDisplay 選擇課程",
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : colorScheme.cardBackground,
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
+        elevation: isLiquidGlass ? 0 : 0.5,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
         foregroundColor: colorScheme.primaryText,
-        elevation: 0.5,
       ),
       body: Column(
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(8),
-            color: colorScheme.pageBackground,
+            color: isLiquidGlass
+                ? Colors.transparent
+                : colorScheme.pageBackground,
             child: ElevatedButton.icon(
               onPressed: _showSearchSheet,
               icon: const Icon(Icons.search),
@@ -73,13 +86,24 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.accentBlue.withValues(alpha: 0.15),
+                backgroundColor: isLiquidGlass
+                    ? (isDark
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.white.withValues(alpha: 0.5))
+                    : colorScheme.accentBlue.withValues(alpha: 0.15),
                 foregroundColor: colorScheme.accentBlue,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
+                side: isLiquidGlass
+                    ? BorderSide(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.14)
+                            : Colors.white.withValues(alpha: 0.4),
+                      )
+                    : null,
               ),
             ),
           ),
@@ -92,6 +116,7 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
 
   Widget _buildSearchResults() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_isQueryLoading) {
       return Center(
         child: Column(
@@ -129,21 +154,12 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
       itemBuilder: (context, index) {
         final course = _searchResults[index];
 
-        return Card(
-          elevation: 2,
-          margin: const EdgeInsets.only(bottom: 12),
-          clipBehavior: Clip.antiAlias,
-          color: colorScheme.cardBackground,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colorScheme.borderColor, width: 0.5),
+        final Widget tileChild = Theme(
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            unselectedWidgetColor: colorScheme.iconColor,
           ),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              dividerColor: Colors.transparent,
-              unselectedWidgetColor: colorScheme.iconColor,
-            ),
-            child: ExpansionTile(
+          child: ExpansionTile(
               iconColor: colorScheme.primary,
               collapsedIconColor: colorScheme.iconColor,
               tilePadding: const EdgeInsets.symmetric(
@@ -351,8 +367,26 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
                 ),
               ],
             ),
-          ),
-        );
+          );
+
+        return isLiquidGlass
+            ? Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                clipBehavior: Clip.antiAlias,
+                decoration: glassCardDecoration(context, borderRadius: 12),
+                child: tileChild,
+              )
+            : Card(
+                elevation: 2,
+                margin: const EdgeInsets.only(bottom: 12),
+                clipBehavior: Clip.antiAlias,
+                color: colorScheme.cardBackground,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: colorScheme.borderColor, width: 0.5),
+                ),
+                child: tileChild,
+              );
       },
     );
   }
@@ -438,7 +472,7 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
 
   void _showSearchSheet() {
     final colorScheme = Theme.of(context).colorScheme;
-    showModalBottomSheet(
+    showGlassModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: colorScheme.cardBackground,
@@ -452,7 +486,7 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
           maxChildSize: 0.95,
           expand: false,
           builder: (context, scrollController) {
-            return SingleChildScrollView(
+            final Widget sheetContent = SingleChildScrollView(
               controller: scrollController,
               padding: EdgeInsets.only(
                 left: 20,
@@ -651,6 +685,28 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
                 ],
               ),
             );
+            if (!LayoutStyleNotifier.instance.isLiquidGlass) {
+              return sheetContent;
+            }
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return Container(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                    : Colors.white.withValues(alpha: 0.90),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.14)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+              child: sheetContent,
+            );
           },
         );
       },
@@ -689,7 +745,7 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("搜尋失敗: $e")));
+        ).showSnackBar(SnackBar(content: Text("搜尋失敗: $e"), duration: const Duration(seconds: 2)));
     }
   }
 
@@ -781,7 +837,9 @@ class _CourseSearchPickerPageState extends State<CourseSearchPickerPage> {
       'https://selcrs.nsysu.edu.tw/menu5/showoutline.asp?SYEAR=$syear&SEM=$sem&CrsDat=$courseId',
     );
     try {
-      final response = await http.get(url);
+      final client = createHttpClient();
+      final response = await client.get(url);
+      client.close();
       if (response.statusCode == 200) {
         String html = utf8.decode(response.bodyBytes, allowMalformed: true);
         final RegExp exp = RegExp(

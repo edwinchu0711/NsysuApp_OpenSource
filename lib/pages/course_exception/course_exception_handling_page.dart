@@ -7,12 +7,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'course_search_picker_page.dart'; // 確保路徑正確引入課程搜尋頁面
 import 'course_exception_download_page.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
 import 'course_exception_models.dart';
 import 'widgets/abnormal_course_card.dart';
 import 'widgets/manual_course_card.dart';
 import 'widgets/inline_course_picker.dart';
-import '../../services/session_service.dart';
 import '../../utils/utils.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_dialog.dart';
+import '../../services/http_client_factory.dart';
 
 bool test = false;
 
@@ -36,7 +39,7 @@ class _CourseExceptionHandlingPageState
   // 非清單上的手動輸入課程 (網頁預設提供兩筆)
   final List<ManualCourse> _manualCourses = [];
 
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
 
   // Widescreen inline picker states
@@ -166,6 +169,7 @@ class _CourseExceptionHandlingPageState
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _reasons = parsedReasons;
         _courses = parsedCourses;
@@ -298,6 +302,7 @@ class _CourseExceptionHandlingPageState
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _courses = parsedCourses;
         _isLoading = false;
@@ -307,6 +312,7 @@ class _CourseExceptionHandlingPageState
       });
     } catch (e) {
       debugPrint("❌ [_fetchAbnormalData] 錯誤: $e");
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll("Exception:", "").trim();
         _isLoading = false;
@@ -315,56 +321,51 @@ class _CourseExceptionHandlingPageState
   }
 
   void _showNoticeDialog() {
+    if (!mounted) return;
     final colorScheme = Theme.of(context).colorScheme;
-    showDialog(
+    showGlassDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      title: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.amber[800] ?? Colors.amber,
+            size: 28,
           ),
-          backgroundColor: colorScheme.cardBackground,
-          title: Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.amber[800] ?? Colors.amber,
-                size: 28,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                "重要提醒",
-                style: TextStyle(
-                  color: colorScheme.primaryText,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            "此部分功能僅供產出「異常處理申請表」的 PDF 檔案以供下載列印，並非線上直接完成異常處理的登錄與辦理。請在生成 PDF 之後，務必按照學校規定的流程進行後續辦理。",
+          const SizedBox(width: 8),
+          Text(
+            "重要提醒",
             style: TextStyle(
-              color: colorScheme.bodyText,
-              fontSize: 15,
-              height: 1.5,
+              color: colorScheme.primaryText,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                "我知道了",
-                style: TextStyle(
-                  color: colorScheme.accentBlue,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+        ],
+      ),
+      content: Text(
+        "此部分功能僅供產出「異常處理申請表」的 PDF 檔案以供下載列印，並非線上直接完成異常處理的登錄與辦理。請在生成 PDF 之後，務必按照學校規定的流程進行後續辦理。",
+        style: TextStyle(
+          color: colorScheme.bodyText,
+          fontSize: 15,
+          height: 1.5,
+        ),
+      ),
+      actions: [
+        Builder(
+          builder: (dialogCtx) => TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: Text(
+              "我知道了",
+              style: TextStyle(
+                color: colorScheme.accentBlue,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
@@ -413,14 +414,19 @@ class _CourseExceptionHandlingPageState
     final bool isWide = MediaQuery.of(context).size.width >= 800;
 
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text('異常處理申請'),
         centerTitle: true,
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : colorScheme.cardBackground,
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
+        elevation: isLiquidGlass ? 0 : 0.5,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
         foregroundColor: colorScheme.primaryText,
-        elevation: 0.5,
       ),
       backgroundColor: colorScheme.pageBackground,
       body: _buildBody(),
@@ -431,14 +437,24 @@ class _CourseExceptionHandlingPageState
   }
 
   Widget _buildBody() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: Colors.green),
-            SizedBox(height: 16),
-            Text("正在連線學校系統取得資料..."),
+            CircularProgressIndicator(
+              color: isLiquidGlass ? colorScheme.primary : Colors.green,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "正在連線學校系統取得資料...",
+              style: TextStyle(
+                color: isLiquidGlass ? colorScheme.subtitleText : null,
+              ),
+            ),
           ],
         ),
       );
@@ -456,7 +472,10 @@ class _CourseExceptionHandlingPageState
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isLiquidGlass ? colorScheme.primaryText : null,
+                ),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -758,6 +777,8 @@ class _CourseExceptionHandlingPageState
 
   Widget _buildWideManualPanel() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return Column(
       children: [
         Expanded(
@@ -870,16 +891,26 @@ class _CourseExceptionHandlingPageState
           ),
         ),
         Divider(height: 1, color: colorScheme.borderColor),
-        Container(
-          padding: const EdgeInsets.all(24.0),
-          color: colorScheme.cardBackground,
-          child: Column(
+        () {
+          final Widget barChild = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueGrey[800],
-                  foregroundColor: Colors.white,
+                  // liquid glass：按鈕透明，透出毛玻璃底框；其他模式維持原深藍灰。
+                  backgroundColor: isLiquidGlass
+                      ? Colors.transparent
+                      : Colors.blueGrey[800],
+                  foregroundColor: isLiquidGlass
+                      ? colorScheme.primaryText
+                      : Colors.white,
+                  side: isLiquidGlass
+                      ? BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.14)
+                              : Colors.white.withValues(alpha: 0.4),
+                        )
+                      : null,
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -893,8 +924,35 @@ class _CourseExceptionHandlingPageState
                 ),
               ),
             ],
-          ),
-        ),
+          );
+          if (isLiquidGlass) {
+            return Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                    : Colors.white.withValues(alpha: 0.90),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.14)
+                        : Colors.black.withValues(alpha: 0.08),
+                    width: 1.0,
+                  ),
+                ),
+              ),
+              child: barChild,
+            );
+          }
+          return Container(
+            padding: const EdgeInsets.all(24.0),
+            color: colorScheme.cardBackground,
+            child: barChild,
+          );
+        }(),
       ],
     );
   }
@@ -920,6 +978,7 @@ class _CourseExceptionHandlingPageState
       MaterialPageRoute(builder: (context) => const CourseSearchPickerPage()),
     );
 
+    if (!mounted) return;
     if (pickedCode != null) {
       setState(() {
         manual.courseNo = pickedCode;
@@ -928,25 +987,62 @@ class _CourseExceptionHandlingPageState
   }
 
   Widget _buildSubmitButton() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blueGrey[800], // 改為深藍灰色
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
+
+    final Widget button = ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        // liquid glass：按鈕透明，直接透出毛玻璃底框，僅以邊框與文字定義；
+        // 其他模式維持原深藍灰。
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : Colors.blueGrey[800],
+        foregroundColor: isLiquidGlass ? colorScheme.primaryText : Colors.white,
+        side: isLiquidGlass
+            ? BorderSide(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.white.withValues(alpha: 0.4),
+              )
+            : null,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: isLiquidGlass ? 0 : null,
+      ),
+      onPressed: _handleSubmit,
+      child: const Text(
+        "確認並送出申請",
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    );
+
+    if (isLiquidGlass) {
+      // glass 模式：高不透明度玻璃底框
+      return SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                : Colors.white.withValues(alpha: 0.90),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border(
+              top: BorderSide(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.black.withValues(alpha: 0.08),
+                width: 1.0,
+              ),
             ),
           ),
-          onPressed: _handleSubmit,
-          child: const Text(
-            "確認並送出申請",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          child: button,
         ),
-      ),
+      );
+    }
+
+    return SafeArea(
+      child: Padding(padding: const EdgeInsets.all(16.0), child: button),
     );
   }
 
@@ -955,6 +1051,7 @@ class _CourseExceptionHandlingPageState
   // ==========================================================
   Future<void> _handleSubmit() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     String studentId = (prefs.getString('username') ?? "").trim();
     String password = (prefs.getString('password') ?? "").trim();
 
@@ -1010,13 +1107,18 @@ class _CourseExceptionHandlingPageState
           stuid: studentId,
           password: password,
         ),
+        settings: const RouteSettings(name: 'course_exception_download'),
       ),
     );
   }
 
   void _showSnackBar(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red[600]),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red[600],
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 }

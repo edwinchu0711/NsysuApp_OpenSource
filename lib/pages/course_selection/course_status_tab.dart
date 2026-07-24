@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/course_selection_service.dart';
 import '../../services/course_query_service.dart';
+import '../../services/offline_error_handler.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_card.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
 
 class CourseStatusTab extends StatelessWidget {
   final bool isLoading;
@@ -124,130 +128,154 @@ class CourseStatusTab extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        // 頂部資訊卡片 (學分 + 預覽按鈕) - 調整為 Card 並配合 isCompact 對齊
-        Card(
-          elevation: 2,
-          color: colorScheme.cardBackground,
-          margin: EdgeInsets.fromLTRB(12, 12, 12, isCompact ? 4 : 0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: isCompact ? 8 : 12,
-            ),
-            child: Row(
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
+    // 頂部資訊卡片 (學分 + 預覽按鈕) - 調整為 Card 並配合 isCompact 對齊
+    final Widget topInner = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: isCompact ? 8 : 12,
+      ),
+      child: Row(
+        children: [
+          // 左側：學分統計
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 左側：學分統計
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Text(
+                  "學分統計",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.subtitleText,
+                    fontSize: isCompact ? 12 : 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text.rich(
+                  TextSpan(
+                    style: TextStyle(
+                      fontSize: isCompact ? 14 : 16,
+                      color: colorScheme.primaryText,
+                    ),
                     children: [
-                      Text(
-                        "學分統計",
+                      TextSpan(
+                        text: selectedCredits.toStringAsFixed(0),
                         style: TextStyle(
+                          color: colorScheme.isDark
+                              ? Colors.green[300]
+                              : Colors.green,
                           fontWeight: FontWeight.bold,
-                          color: colorScheme.subtitleText,
-                          fontSize: isCompact ? 12 : 14,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text.rich(
-                        TextSpan(
-                          style: TextStyle(
-                            fontSize: isCompact ? 14 : 16,
-                            color: colorScheme.primaryText,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: selectedCredits.toStringAsFixed(0),
-                              style: TextStyle(
-                                color: colorScheme.isDark
-                                    ? Colors.green[300]
-                                    : Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: " (已選上) + ",
-                              style: TextStyle(
-                                color: colorScheme.subtitleText,
-                                fontSize: isCompact ? 10 : 12,
-                              ),
-                            ),
-                            TextSpan(
-                              text: registeringCredits.toStringAsFixed(0),
-                              style: TextStyle(
-                                color: colorScheme.isDark
-                                    ? Colors.deepOrange[300]
-                                    : Colors.deepOrange,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: " (登記加選) = ",
-                              style: TextStyle(
-                                color: colorScheme.subtitleText,
-                                fontSize: isCompact ? 10 : 12,
-                              ),
-                            ),
-                            TextSpan(
-                              text: totalCredits.toStringAsFixed(0),
-                              style: TextStyle(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: isCompact ? 16 : 20,
-                              ),
-                            ),
-                          ],
+                      TextSpan(
+                        text: " (已選上) + ",
+                        style: TextStyle(
+                          color: colorScheme.subtitleText,
+                          fontSize: isCompact ? 10 : 12,
+                        ),
+                      ),
+                      TextSpan(
+                        text: registeringCredits.toStringAsFixed(0),
+                        style: TextStyle(
+                          color: colorScheme.isDark
+                              ? Colors.deepOrange[300]
+                              : Colors.deepOrange,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextSpan(
+                        text: " (登記加選) = ",
+                        style: TextStyle(
+                          color: colorScheme.subtitleText,
+                          fontSize: isCompact ? 10 : 12,
+                        ),
+                      ),
+                      TextSpan(
+                        text: totalCredits.toStringAsFixed(0),
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isCompact ? 16 : 20,
                         ),
                       ),
                     ],
                   ),
                 ),
-                // 右側：課表預覽按鈕
-                if (showPreviewButton)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              CoursePreviewPage(courses: courses),
-                        ),
-                      );
-                    },
-                    icon: Icon(Icons.calendar_month, size: isCompact ? 16 : 18),
-                    label: Text(
-                      "課表預覽",
-                      style: TextStyle(fontSize: isCompact ? 12 : 14),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isCompact ? 12 : 16,
-                        vertical: isCompact ? 6 : 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
-        ),
+          // 右側：課表預覽按鈕
+          if (showPreviewButton)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        CoursePreviewPage(courses: courses),
+                  ),
+                );
+              },
+              icon: Icon(Icons.calendar_month, size: isCompact ? 16 : 18),
+              label: Text(
+                "課表預覽",
+                style: TextStyle(fontSize: isCompact ? 12 : 14),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 12 : 16,
+                  vertical: isCompact ? 6 : 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final Widget topInfoCard = isLiquidGlass
+        ? Container(
+            margin: EdgeInsets.fromLTRB(12, 12, 12, isCompact ? 4 : 0),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(context, borderRadius: 12),
+            child: topInner,
+          )
+        : Card(
+            elevation: 2,
+            color: colorScheme.cardBackground,
+            margin: EdgeInsets.fromLTRB(12, 12, 12, isCompact ? 4 : 0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: topInner,
+          );
+
+    return Column(
+      children: [
+        topInfoCard,
 
         // 列表區域 - 修正對齊邊距
         Expanded(
           child: RefreshIndicator(
-            onRefresh: onRefresh,
+            onRefresh: () async {
+              try {
+                await onRefresh();
+              } catch (e) {
+                if (context.mounted) await OfflineErrorHandler.show(context, e);
+              }
+            },
             child: ListView(
-              padding: EdgeInsets.fromLTRB(12, isCompact ? 8 : 12, 12, 12),
+              padding: EdgeInsets.fromLTRB(
+                12,
+                isCompact ? 8 : 12,
+                12,
+                isLiquidGlass ? 100 : 12,
+              ),
               children: listChildren,
             ),
           ),
@@ -263,6 +291,7 @@ class CourseStatusTab extends StatelessWidget {
     bool isDimmed = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     Color statusColor = Colors.grey;
     bool isRegistration = false;
 
@@ -311,108 +340,119 @@ class CourseStatusTab extends StatelessWidget {
     }
 
     // 如果是未選上(isDimmed)，整張卡片透明度降低
-    return Opacity(
-      opacity: isDimmed ? 0.6 : 1.0,
-      child: Card(
-        elevation: isDimmed ? 0 : 2, // 未選上的陰影拿掉，讓它看起來比較扁平
-        color: isDimmed
-            ? colorScheme.secondaryCardBackground
-            : colorScheme.cardBackground, // 未選上的背景稍微灰一點
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ), // 增加圓角至 16
-        margin: EdgeInsets.only(bottom: isCompact ? 8 : 12),
-        child: Padding(
-          padding: EdgeInsets.all(isCompact ? 12 : 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final Widget cardInner = Padding(
+      padding: EdgeInsets.all(isCompact ? 12 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isCompact ? 6 : 8,
-                      vertical: isCompact ? 2 : 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      border: Border.all(color: statusColor),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      course.status,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: isCompact ? 11 : 12,
-                      ),
-                    ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 6 : 8,
+                  vertical: isCompact ? 2 : 4,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  border: Border.all(color: statusColor),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  course.status,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: isCompact ? 11 : 12,
                   ),
-                  topRightWidget,
-                ],
-              ),
-              SizedBox(height: isCompact ? 6 : 8),
-              Text(
-                course.name,
-                style: TextStyle(
-                  fontSize: isCompact ? 15 : 18,
-                  fontWeight: FontWeight.bold,
-                  decoration: isDimmed
-                      ? TextDecoration.lineThrough
-                      : null, // 未選上可考慮加刪除線，不需要可拿掉
-                  color: isDimmed
-                      ? colorScheme.subtitleText
-                      : colorScheme.primaryText,
                 ),
               ),
-              const SizedBox(height: 2),
+              topRightWidget,
+            ],
+          ),
+          SizedBox(height: isCompact ? 6 : 8),
+          Text(
+            course.name,
+            style: TextStyle(
+              fontSize: isCompact ? 15 : 18,
+              fontWeight: FontWeight.bold,
+              decoration: isDimmed
+                  ? TextDecoration.lineThrough
+                  : null, // 未選上可考慮加刪除線，不需要可拿掉
+              color: isDimmed
+                  ? colorScheme.subtitleText
+                  : colorScheme.primaryText,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            "${course.courseNo} • ${course.credits}學分 • ${course.grade}年級",
+            style: TextStyle(
+              color: colorScheme.bodyText,
+              fontSize: isCompact ? 12 : 13,
+            ),
+          ),
+          Divider(height: isCompact ? 16 : 24),
+          Row(
+            children: [
+              Icon(
+                Icons.person,
+                size: isCompact ? 14 : 16,
+                color: colorScheme.subtitleText,
+              ),
+              const SizedBox(width: 4),
               Text(
-                "${course.courseNo} • ${course.credits}學分 • ${course.grade}年級",
+                course.professor,
                 style: TextStyle(
-                  color: colorScheme.bodyText,
+                  color: colorScheme.primaryText,
                   fontSize: isCompact ? 12 : 13,
                 ),
               ),
-              Divider(height: isCompact ? 16 : 24),
-              Row(
-                children: [
-                  Icon(
-                    Icons.person,
-                    size: isCompact ? 14 : 16,
-                    color: colorScheme.subtitleText,
+              SizedBox(width: isCompact ? 12 : 16),
+              Icon(
+                Icons.location_on,
+                size: isCompact ? 14 : 16,
+                color: colorScheme.subtitleText,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  course.timeRoom,
+                  style: TextStyle(
+                    color: colorScheme.bodyText,
+                    fontSize: isCompact ? 11 : 12,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    course.professor,
-                    style: TextStyle(
-                      color: colorScheme.primaryText,
-                      fontSize: isCompact ? 12 : 13,
-                    ),
-                  ),
-                  SizedBox(width: isCompact ? 12 : 16),
-                  Icon(
-                    Icons.location_on,
-                    size: isCompact ? 14 : 16,
-                    color: colorScheme.subtitleText,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      course.timeRoom,
-                      style: TextStyle(
-                        color: colorScheme.bodyText,
-                        fontSize: isCompact ? 11 : 12,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
+    );
+
+    final Widget cardWidget = isLiquidGlass
+        ? Container(
+            margin: EdgeInsets.only(bottom: isCompact ? 8 : 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(context, borderRadius: 16),
+            child: cardInner,
+          )
+        : Card(
+            elevation: isDimmed ? 0 : 2, // 未選上的陰影拿掉，讓它看起來比較扁平
+            color: isDimmed
+                ? colorScheme.secondaryCardBackground
+                : colorScheme.cardBackground, // 未選上的背景稍微灰一點
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ), // 增加圓角至 16
+            margin: EdgeInsets.only(bottom: isCompact ? 8 : 12),
+            child: cardInner,
+          );
+
+    return Opacity(
+      opacity: isDimmed ? 0.6 : 1.0,
+      child: cardWidget,
     );
   }
 }
@@ -426,15 +466,20 @@ class CoursePreviewPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("課表預覽"),
         centerTitle: true,
-        backgroundColor: colorScheme.isDark
-            ? colorScheme.scaffoldBackground
-            : Colors.white,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : (colorScheme.isDark
+                ? colorScheme.scaffoldBackground
+                : Colors.white),
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
+        elevation: isLiquidGlass ? 0 : 1,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
         foregroundColor: colorScheme.primaryText,
-        elevation: 1,
       ),
       body: CoursePreviewWidget(courses: courses),
     );
@@ -496,20 +541,12 @@ class CoursePreviewWidget extends StatelessWidget {
 
   static Map<String, String> _splitCourseName(String fullName) {
     final cleanName = fullName.split('\n')[0];
-    final RegExp englishRegex = RegExp(r'[A-Za-z].*');
-    final match = englishRegex.firstMatch(cleanName);
-
-    if (match != null) {
-      final startIndex = match.start;
-      final chinesePart = cleanName.substring(0, startIndex).trim();
-      final englishPart = cleanName.substring(startIndex).trim();
-      return {
-        "chinese": chinesePart.isEmpty ? englishPart : chinesePart,
-        "english": chinesePart.isEmpty ? "" : englishPart
-      };
+    final String chinesePart = keepUntilLastChinese(cleanName).trim();
+    if (chinesePart.isEmpty) {
+      return {"chinese": cleanName, "english": ""};
     }
-
-    return {"chinese": cleanName, "english": ""};
+    final String englishPart = cleanName.substring(chinesePart.length).trim();
+    return {"chinese": chinesePart, "english": englishPart};
   }
 
   static Widget _buildModernDetailRow(
@@ -531,7 +568,7 @@ class CoursePreviewWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(isDark ? 0.15 : 0.08),
+              color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 18),
@@ -768,12 +805,12 @@ class CoursePreviewWidget extends StatelessWidget {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.teal.withOpacity(
+                                  color: Colors.teal.withValues(alpha: 
                                     isDark ? 0.15 : 0.08,
                                   ),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: Colors.teal.withOpacity(
+                                    color: Colors.teal.withValues(alpha: 
                                       isDark ? 0.3 : 0.2,
                                     ),
                                     width: 0.8,
@@ -825,7 +862,7 @@ class CoursePreviewWidget extends StatelessWidget {
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -845,7 +882,7 @@ class CoursePreviewWidget extends StatelessWidget {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -866,7 +903,7 @@ class CoursePreviewWidget extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -895,7 +932,7 @@ class CoursePreviewWidget extends StatelessWidget {
                         Text(
                           englishName,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             fontSize: 12,
                             fontWeight: FontWeight.normal,
                             height: 1.2,
@@ -978,7 +1015,7 @@ class CoursePreviewWidget extends StatelessWidget {
 
   static const List<String> _weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
-  String keepUntilLastChinese(String input) {
+  static String keepUntilLastChinese(String input) {
     final RegExp chineseRegex = RegExp(r'[\u4e00-\u9fa5]');
     final Iterable<Match> matches = chineseRegex.allMatches(input);
     if (matches.isEmpty) return input.split('\n')[0];
@@ -1033,6 +1070,8 @@ class CoursePreviewWidget extends StatelessWidget {
     double? height,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     Color bgColor;
     if (course.status.contains("選上")) {
       bgColor = colorScheme.isDark
@@ -1054,8 +1093,14 @@ class CoursePreviewWidget extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: isLiquidGlass ? bgColor.withValues(alpha: 0.82) : bgColor,
         borderRadius: BorderRadius.circular(4),
+        border: isLiquidGlass
+            ? Border.all(
+                color: Colors.white.withValues(alpha: isDark ? 0.15 : 0.25),
+                width: 0.5,
+              )
+            : null,
       ),
       child: Column(
         mainAxisSize: height != null ? MainAxisSize.max : MainAxisSize.min,
@@ -1095,6 +1140,7 @@ class CoursePreviewWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     final scheduleMap = _parseCoursesToSchedule();
 
     List<int> visibleDays = [0, 1, 2, 3, 4];
@@ -1104,9 +1150,13 @@ class CoursePreviewWidget extends StatelessWidget {
     List<String> visiblePeriods = _calculateVisiblePeriods(scheduleMap);
     int maxDay = visibleDays.length;
 
-    final headerBgColor = colorScheme.isDark
-        ? const Color(0xFF252B3B)
-        : const Color(0xFFF4F8FF);
+    final headerBgColor = isLiquidGlass
+        ? (colorScheme.isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.white.withValues(alpha: 0.4))
+        : (colorScheme.isDark
+            ? const Color(0xFF252B3B)
+            : const Color(0xFFF4F8FF));
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isTablet = screenWidth >= 750;
@@ -1126,14 +1176,23 @@ class CoursePreviewWidget extends StatelessWidget {
         locationFontSize = (8.0 + (columnWidth - 60.0) * 0.08).clamp(7.0, 11.0);
 
         return Container(
-          color: colorScheme.isDark
-              ? colorScheme.scaffoldBackground
-              : Colors.grey[50],
+          color: isLiquidGlass
+              ? Colors.transparent
+              : (colorScheme.isDark
+                  ? colorScheme.scaffoldBackground
+                  : Colors.grey[50]),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(
+              bottom: isLiquidGlass ? 100 : 0,
+            ),
             child: Table(
               border: TableBorder.all(
-                color: colorScheme.borderColor,
+                color: isLiquidGlass
+                    ? (colorScheme.isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.05))
+                    : colorScheme.borderColor,
                 width: 0.5,
               ),
               columnWidths: {0: FixedColumnWidth(periodColWidth)},
@@ -1386,8 +1445,11 @@ class CoursePreviewWidget extends StatelessWidget {
     Map<int, Map<String, List<CourseSelectionData>>> map = {};
 
     for (var course in courses) {
-      if (course.status.contains("退選") || course.status.contains("未選上"))
+      if (course.status.contains("退選") ||
+          course.status.contains("未選上") ||
+          course.status.contains("失敗")) {
         continue;
+      }
 
       if (course.timeRoom.isEmpty) continue;
 

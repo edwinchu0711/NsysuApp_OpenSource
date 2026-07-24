@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/course_model.dart'; // 請確認路徑
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_dialog.dart';
+import '../../widgets/glass/glass_card.dart';
 
 class AssistantExportPage extends StatefulWidget {
   final bool isInline;
@@ -105,7 +109,7 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
     if (_selectedCourseIds.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("請至少選擇一門課程")));
+      ).showSnackBar(const SnackBar(content: Text("請至少選擇一門課程"), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -119,55 +123,52 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
 
       if (mounted) {
         final colorScheme = Theme.of(context).colorScheme;
-        showDialog(
+        showGlassDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            backgroundColor: colorScheme.cardBackground,
-            title: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green),
-                const SizedBox(width: 8),
-                Text(
-                  "匯出成功",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primaryText,
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              "已成功將課程匯出！\n\n請在選課開放期間，前往「選課系統」頁面，系統會自動將這些課程加入您的待加選清單中。",
-              style: TextStyle(color: colorScheme.bodyText),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // 關閉 Dialog
-                  if (widget.isInline) {
-                    widget.onExportSuccess?.call();
-                  } else {
-                    Navigator.pop(context); // 返回助手頁面
-                  }
-                },
-                child: Text(
-                  "我知道了",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                  ),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green),
+              const SizedBox(width: 8),
+              Text(
+                "匯出成功",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primaryText,
                 ),
               ),
             ],
           ),
+          content: Text(
+            "已成功將課程匯出！\n\n請在選課開放期間，前往「選課系統」頁面，系統會自動將這些課程加入您的待加選清單中。",
+            style: TextStyle(color: colorScheme.bodyText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).pop(); // 關閉 Dialog
+                if (widget.isInline) {
+                  widget.onExportSuccess?.call();
+                } else {
+                  Navigator.pop(context); // 返回助手頁面
+                }
+              },
+              child: Text(
+                "我知道了",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("匯出失敗：$e")));
+        ).showSnackBar(SnackBar(content: Text("匯出失敗：$e"), duration: const Duration(seconds: 2)));
       }
     }
   }
@@ -177,7 +178,7 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
     if (_selectedCourseIds.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("請至少選擇一門課程")));
+      ).showSnackBar(const SnackBar(content: Text("請至少選擇一門課程"), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -207,13 +208,13 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
             ),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
-          ),
+            duration: const Duration(seconds: 2),),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("複製代碼失敗: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("複製代碼失敗: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 2)),
         );
       }
     }
@@ -222,38 +223,40 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     bool isAllSelected =
         _selectedCourseIds.length == _assistantCourses.length &&
         _assistantCourses.isNotEmpty;
 
-    return Scaffold(
-      appBar: widget.isInline
-          ? null
-          : AppBar(
-              title: const Text("匯出至選課系統"),
-              automaticallyImplyLeading: !widget.isInline,
-              actions: [
-                if (_assistantCourses.isNotEmpty)
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        if (isAllSelected) {
-                          _selectedCourseIds.clear();
-                        } else {
-                          _selectedCourseIds = _assistantCourses
-                              .map((c) => c.code)
-                              .toSet();
-                        }
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: colorScheme.primary,
-                    ),
-                    child: Text(isAllSelected ? "取消全選" : "全選"),
+    final appBar = widget.isInline
+        ? null
+        : AppBar(
+            title: const Text("匯出至選課系統"),
+            automaticallyImplyLeading: !widget.isInline,
+            actions: [
+              if (_assistantCourses.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      if (isAllSelected) {
+                        _selectedCourseIds.clear();
+                      } else {
+                        _selectedCourseIds = _assistantCourses
+                            .map((c) => c.code)
+                            .toSet();
+                      }
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
                   ),
-              ],
-            ),
-      body: _isLoading
+                  child: Text(isAllSelected ? "取消全選" : "全選"),
+                ),
+            ],
+          );
+    final bool useScrollableLayout = widget.isInline && isLiquidGlass;
+
+    final body = _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _assistantCourses.isEmpty
           ? Center(
@@ -262,148 +265,311 @@ class _AssistantExportPageState extends State<AssistantExportPage> {
                 style: TextStyle(color: colorScheme.subtitleText),
               ),
             )
-          : Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  color: colorScheme.warningContainer,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.lightbulb_outline,
-                        color: colorScheme.isDark
-                            ? const Color(0xFFFFB74D)
-                            : Colors.orange,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "勾選您想匯出的課程，點擊下方按鈕後，前往「選課系統」頁面即可自動加入待加選清單！",
-                          style: TextStyle(
+          : useScrollableLayout
+              ? _buildScrollableExportBody(context, colorScheme)
+              : Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: isLiquidGlass
+                          ? (glassCardDecoration(context, borderRadius: 12) ??
+                                BoxDecoration(color: colorScheme.warningContainer))
+                          : BoxDecoration(color: colorScheme.warningContainer),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lightbulb_outline,
                             color: colorScheme.isDark
                                 ? const Color(0xFFFFB74D)
-                                : Colors.orange[800],
-                            fontSize: 13,
+                                : Colors.orange,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "勾選您想匯出的課程，點擊下方按鈕後，前往「選課系統」頁面即可自動加入待加選清單！",
+                              style: TextStyle(
+                                color: colorScheme.isDark
+                                    ? const Color(0xFFFFB74D)
+                                    : Colors.orange[800],
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: _assistantCourses.length,
-                    separatorBuilder: (context, index) =>
-                        Divider(height: 1, color: colorScheme.borderColor),
-                    itemBuilder: (context, index) {
-                      final course = _assistantCourses[index];
-                      final isSelected = _selectedCourseIds.contains(
-                        course.code,
-                      );
-                      return CheckboxListTile(
-                        value: isSelected,
-                        title: Text(
-                          course.name.split('\n')[0],
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.primaryText,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "${course.code} · ${course.professor}",
-                          style: TextStyle(color: colorScheme.subtitleText),
-                        ),
-                        activeColor: colorScheme.primary,
-                        onChanged: (bool? value) {
-                          setState(() {
-                            if (value == true) {
-                              _selectedCourseIds.add(course.code);
-                            } else {
-                              _selectedCourseIds.remove(course.code);
-                            }
-                          });
+                    ),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: _assistantCourses.length,
+                        separatorBuilder: (context, index) =>
+                            Divider(height: 1, color: colorScheme.borderColor),
+                        itemBuilder: (context, index) {
+                          final course = _assistantCourses[index];
+                          final isSelected = _selectedCourseIds.contains(
+                            course.code,
+                          );
+                          return CheckboxListTile(
+                            value: isSelected,
+                            title: Text(
+                              course.name.split('\n')[0],
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.primaryText),
+                            ),
+                            subtitle: Text(
+                              "${course.code} · ${course.professor}",
+                              style: TextStyle(color: colorScheme.subtitleText),
+                            ),
+                            activeColor: colorScheme.primary,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                if (value == true) {
+                                  _selectedCourseIds.add(course.code);
+                                } else {
+                                  _selectedCourseIds.remove(course.code);
+                                }
+                              });
+                            },
+                          );
                         },
-                      );
-                    },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      margin: isLiquidGlass
+                          ? EdgeInsets.fromLTRB(
+                              12,
+                              8,
+                              12,
+                              widget.isInline ? 100.0 : 12.0,
+                            )
+                          : null,
+                      decoration: isLiquidGlass
+                          ? (glassCardDecoration(context, borderRadius: 16) ??
+                                BoxDecoration(color: colorScheme.cardBackground))
+                          : BoxDecoration(
+                              color: colorScheme.cardBackground,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.isDark
+                                      ? Colors.black38
+                                      : Colors.black12,
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -5),
+                                ),
+                              ],
+                            ),
+                      child: SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              height: (isLiquidGlass && widget.isInline) ? 36 : 46,
+                              child: ElevatedButton.icon(
+                                onPressed: _selectedCourseIds.isEmpty
+                                    ? null
+                                    : _exportToCart,
+                                icon: const Icon(Icons.shopping_cart_checkout),
+                                label: Text(
+                                  "匯出 ${_selectedCourseIds.length} 門課程至選課系統",
+                                  style: TextStyle(
+                                    fontSize: (isLiquidGlass && widget.isInline) ? 13 : 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colorScheme.primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              height: (isLiquidGlass && widget.isInline) ? 6 : 10,
+                            ),
+                            SizedBox(
+                              width: double.infinity,
+                              height: (isLiquidGlass && widget.isInline) ? 36 : 46,
+                              child: OutlinedButton.icon(
+                                onPressed: _selectedCourseIds.isEmpty
+                                    ? null
+                                    : _exportCodeToClipboard,
+                                icon: const Icon(Icons.copy_all_rounded),
+                                label: Text(
+                                  "複製選課代碼 (${_selectedCourseIds.length} 門課程)",
+                                  style: TextStyle(
+                                    fontSize: (isLiquidGlass && widget.isInline) ? 13 : 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: colorScheme.primary,
+                                  side: BorderSide(
+                                    color: colorScheme.primary,
+                                    width: 1.5,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+
+    return widget.isInline
+        ? Scaffold(
+            appBar: appBar,
+            backgroundColor: isLiquidGlass ? Colors.transparent : null,
+            body: body,
+          )
+        : GlassPageScaffold(appBar: appBar, body: body);
+  }
+
+  Widget _buildScrollableExportBody(BuildContext context, ColorScheme colorScheme) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: isLiquidGlass
+              ? (glassCardDecoration(context, borderRadius: 12) ??
+                    BoxDecoration(color: colorScheme.warningContainer))
+              : BoxDecoration(color: colorScheme.warningContainer),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline,
+                color: colorScheme.isDark
+                    ? const Color(0xFFFFB74D)
+                    : Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "勾選您想匯出的課程，點擊下方按鈕後，前往「選課系統」頁面即可自動加入待加選清單！",
+                  style: TextStyle(
+                    color: colorScheme.isDark
+                        ? const Color(0xFFFFB74D)
+                        : Colors.orange[800],
+                    fontSize: 13,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.cardBackground,
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorScheme.isDark
-                            ? Colors.black38
-                            : Colors.black12,
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _assistantCourses.length,
+          separatorBuilder: (context, index) =>
+              Divider(height: 1, color: colorScheme.borderColor),
+          itemBuilder: (context, index) {
+            final course = _assistantCourses[index];
+            final isSelected = _selectedCourseIds.contains(
+              course.code,
+            );
+            return CheckboxListTile(
+              value: isSelected,
+              title: Text(
+                course.name.split('\n')[0],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primaryText,
+                ),
+              ),
+              subtitle: Text(
+                "${course.code} · ${course.professor}",
+                style: TextStyle(color: colorScheme.subtitleText),
+              ),
+              activeColor: colorScheme.primary,
+              onChanged: (bool? value) {
+                setState(() {
+                  if (value == true) {
+                    _selectedCourseIds.add(course.code);
+                  } else {
+                    _selectedCourseIds.remove(course.code);
+                  }
+                });
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: isLiquidGlass
+              ? (glassCardDecoration(context, borderRadius: 16) ??
+                    BoxDecoration(color: colorScheme.cardBackground))
+              : BoxDecoration(color: colorScheme.cardBackground),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: ElevatedButton.icon(
+                  onPressed: _selectedCourseIds.isEmpty ? null : _exportToCart,
+                  icon: const Icon(Icons.shopping_cart_checkout, size: 16),
+                  label: Text(
+                    "匯出 ${_selectedCourseIds.length} 門課程至選課系統",
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: 46,
-                          child: ElevatedButton.icon(
-                            onPressed: _selectedCourseIds.isEmpty
-                                ? null
-                                : _exportToCart,
-                            icon: const Icon(Icons.shopping_cart_checkout),
-                            label: Text(
-                              "匯出 ${_selectedCourseIds.length} 門課程至選課系統",
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: colorScheme.primary,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 46,
-                          child: OutlinedButton.icon(
-                            onPressed: _selectedCourseIds.isEmpty
-                                ? null
-                                : _exportCodeToClipboard,
-                            icon: const Icon(Icons.copy_all_rounded),
-                            label: Text(
-                              "複製選課代碼 (${_selectedCourseIds.length} 門課程)",
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: colorScheme.primary,
-                              side: BorderSide(
-                                color: colorScheme.primary,
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: OutlinedButton.icon(
+                  onPressed: _selectedCourseIds.isEmpty ? null : _exportCodeToClipboard,
+                  icon: const Icon(Icons.copy_all_rounded, size: 16),
+                  label: Text(
+                    "複製選課代碼 (${_selectedCourseIds.length} 門課程)",
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    side: BorderSide(
+                      color: colorScheme.primary,
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 100), // Bottom space for wide screen navigation bar
+      ],
     );
   }
 }

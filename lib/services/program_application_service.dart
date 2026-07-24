@@ -6,6 +6,7 @@ import 'package:html/parser.dart' as parser;
 import 'package:html/dom.dart' as dom;
 import '../models/program_model.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class ProgramApplicationService {
   static final ProgramApplicationService instance =
@@ -15,7 +16,7 @@ class ProgramApplicationService {
   static const String CACHE_KEY = 'applied_programs_cache';
   static const String BASE_URL = 'https://stuapp-oaa.nsysu.edu.tw/stuapprep';
 
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   final ValueNotifier<List<AppliedProgram>> appliedProgramsNotifier =
       ValueNotifier([]);

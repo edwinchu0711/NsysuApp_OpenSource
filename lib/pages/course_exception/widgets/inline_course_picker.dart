@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../theme/app_theme.dart'; // 引入 AppTheme 與 AppColors 擴充
+import '../../../theme/layout_style_notifier.dart';
+import '../../../widgets/glass/glass_card.dart';
 import '../../../services/course_query_service.dart';
+import '../../../services/http_client_factory.dart';
 
 /// 寬螢幕模式下的行內課程搜尋選取器
 class InlineCoursePicker extends StatefulWidget {
@@ -50,6 +53,8 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     String semDisplay = "";
     final semStr = CourseQueryService.instance.currentSemester;
     if (semStr.length == 4) {
@@ -63,7 +68,11 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
         // 行內選取器標頭
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          color: colorScheme.cardBackground,
+          color: isLiquidGlass
+              ? (isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.45))
+              : colorScheme.cardBackground,
           child: Row(
             children: [
               IconButton(
@@ -124,7 +133,11 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
         if (_inlineSearchFiltersExpanded)
           Container(
             padding: const EdgeInsets.all(16.0),
-            color: colorScheme.subtleBackground,
+            color: isLiquidGlass
+                ? (isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.white.withValues(alpha: 0.35))
+                : colorScheme.subtleBackground,
             child: Column(
               children: [
                 Row(
@@ -279,6 +292,7 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
 
   Widget _buildInlineSearchResults() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_isQueryLoading) {
       return Center(
         child: Column(
@@ -334,21 +348,12 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
       itemBuilder: (context, index) {
         final course = _searchResults[index];
 
-        return Card(
-          elevation: 1,
-          margin: const EdgeInsets.only(bottom: 12),
-          clipBehavior: Clip.antiAlias,
-          color: colorScheme.cardBackground,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: colorScheme.borderColor, width: 0.5),
+        final Widget tileChild = Theme(
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            unselectedWidgetColor: colorScheme.iconColor,
           ),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              dividerColor: Colors.transparent,
-              unselectedWidgetColor: colorScheme.iconColor,
-            ),
-            child: ExpansionTile(
+          child: ExpansionTile(
               iconColor: colorScheme.primary,
               collapsedIconColor: colorScheme.iconColor,
               tilePadding: const EdgeInsets.symmetric(
@@ -561,8 +566,26 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
                 ),
               ],
             ),
-          ),
-        );
+          );
+
+        return isLiquidGlass
+            ? Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                clipBehavior: Clip.antiAlias,
+                decoration: glassCardDecoration(context, borderRadius: 12),
+                child: tileChild,
+              )
+            : Card(
+                elevation: 1,
+                margin: const EdgeInsets.only(bottom: 12),
+                clipBehavior: Clip.antiAlias,
+                color: colorScheme.cardBackground,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: colorScheme.borderColor, width: 0.5),
+                ),
+                child: tileChild,
+              );
       },
     );
   }
@@ -660,7 +683,9 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
       'https://selcrs.nsysu.edu.tw/menu5/showoutline.asp?SYEAR=$syear&SEM=$sem&CrsDat=$courseId',
     );
     try {
-      final response = await http.get(url);
+      final client = createHttpClient();
+      final response = await client.get(url);
+      client.close();
       if (response.statusCode == 200) {
         String html = utf8.decode(response.bodyBytes, allowMalformed: true);
         final RegExp exp = RegExp(
@@ -833,9 +858,9 @@ class _InlineCoursePickerState extends State<InlineCoursePicker> {
     } catch (e) {
       setState(() => _isQueryLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("搜尋失敗: $e")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("搜尋失敗: $e"), duration: const Duration(seconds: 2)));
       }
     }
   }

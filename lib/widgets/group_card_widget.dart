@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/program_model.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
 import '../widgets/dashed_rect.dart';
+import 'glass/glass_card.dart';
 
 /// Source of a course for badge display in RequiredCourseSimRightPanel.
 enum CourseSource { taken, required, missing }
@@ -55,11 +57,12 @@ class GroupCardWidget extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -67,7 +70,9 @@ class GroupCardWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
             decoration: BoxDecoration(
-              color: colorScheme.secondaryCardBackground,
+              color: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : colorScheme.secondaryCardBackground,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(12),
               ),
@@ -103,7 +108,7 @@ class GroupCardWidget extends StatelessWidget {
             ),
           ),
           // Group external credits row
-          if (g.groupExternalCredits != null) _buildGroupExternalCreditsRow(g),
+          if (g.groupExternalCredits != null) _buildGroupExternalCreditsRow(g, context),
           // Subject tables
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -129,7 +134,7 @@ class GroupCardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildGroupExternalCreditsRow(GroupResult g) {
+  Widget _buildGroupExternalCreditsRow(GroupResult g, BuildContext context) {
     final rule = g.groupExternalCredits!;
     final met = g.externalCreditsEarned >= rule.min;
     final icon = met ? Icons.check_circle_outline : Icons.info_outline;
@@ -140,7 +145,9 @@ class GroupCardWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.secondaryCardBackground,
+        color: LayoutStyleNotifier.instance.isLiquidGlass
+            ? Colors.white.withValues(alpha: 0.03)
+            : colorScheme.secondaryCardBackground,
         border: Border(
           top: BorderSide(
             color: colorScheme.borderColor.withValues(alpha: 0.5),
@@ -468,13 +475,9 @@ class GroupCardWidget extends StatelessWidget {
             parts.add(alt);
           }
         }
-        alternativesText = parts.length > 3
-            ? '${parts.sublist(0, 3).join('、')} 等${parts.length}門'
-            : parts.join('、');
+        alternativesText = parts.join('、');
       } else {
-        alternativesText = s.alternatives!.length > 3
-            ? '${s.alternatives!.sublist(0, 3).join('、')} 等${s.alternatives!.length}門'
-            : s.alternatives!.join('、');
+        alternativesText = s.alternatives!.join('、');
       }
     } else {
       alternativesText = '—';

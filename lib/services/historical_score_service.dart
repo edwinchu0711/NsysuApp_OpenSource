@@ -9,6 +9,9 @@ import 'package:html/parser.dart' as parser;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/utils.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
+import 'offline_aware_http_client.dart';
+import 'offline_mode_service.dart';
 
 // --- 資料模型 ---
 class CourseScore {
@@ -56,13 +59,13 @@ class HistoricalScoreService {
     // 改由外部 (如 main.dart) 在存儲系統就緒後顯式調用 loadFromCache()
   }
 
-  http.Client _client = http.Client();
+  http.Client _client = createHttpClient();
 
   void _recreateClient() {
     try {
       _client.close();
     } catch (_) {}
-    _client = http.Client();
+    _client = createHttpClient();
   }
 
   static const String CACHE_KEY = "historical_scores_data_plain_v3";
@@ -556,6 +559,9 @@ class HistoricalScoreService {
     String password,
     void Function(int done, int total)? onProgress,
   ) async {
+    if (OfflineModeService.instance.isOffline) {
+      throw const OfflineDisabledException();
+    }
     Map<String, Map<String, String>> results = {};
 
     final ioClient = HttpClient()

@@ -4,6 +4,7 @@ import '../models/program_model.dart';
 import '../theme/app_theme.dart';
 import 'credit_badge_widget.dart';
 import 'progress_ring.dart';
+import 'glass/glass_card.dart';
 
 class ProgressHeaderWidget extends StatelessWidget {
   final EligibilityResult result;
@@ -30,11 +31,13 @@ class ProgressHeaderWidget extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration:
+          glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -65,7 +68,9 @@ class ProgressHeaderWidget extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (showButtons && pdfLink != null && pdfLink!.isNotEmpty)
+                        if (showButtons &&
+                            pdfLink != null &&
+                            pdfLink!.isNotEmpty)
                           IconButton(
                             icon: const Icon(Icons.picture_as_pdf_rounded),
                             tooltip: '查看 PDF 詳細資料',
@@ -76,8 +81,12 @@ class ProgressHeaderWidget extends StatelessWidget {
                         if (showButtons && onFavoriteToggle != null)
                           IconButton(
                             icon: Icon(
-                              isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                              color: isFavorite ? Colors.amber[600] : colorScheme.primaryText,
+                              isFavorite
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              color: isFavorite
+                                  ? Colors.amber[600]
+                                  : colorScheme.primaryText,
                             ),
                             tooltip: isFavorite ? '移除最愛' : '加入最愛',
                             onPressed: onFavoriteToggle,
@@ -157,7 +166,11 @@ class ProgressHeaderWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildDisclaimerText(BuildContext context, ColorScheme colorScheme, String ctdrUrl) {
+  Widget _buildDisclaimerText(
+    BuildContext context,
+    ColorScheme colorScheme,
+    String ctdrUrl,
+  ) {
     final themeFontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
     final style = TextStyle(
       fontFamily: themeFontFamily,

@@ -4,6 +4,9 @@ import '../../services/bus_service.dart';
 import '../../models/bus_info.dart';
 import '../../models/bus_time.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../services/offline_error_handler.dart';
 
 enum _BusTimeState { loading, success, error }
 
@@ -47,6 +50,14 @@ class _BusTimePageState extends State<BusTimePage>
   }
 
   Future<void> _fetchData() async {
+    if (OfflineErrorHandler.isOffline) {
+      _timer?.cancel();
+      if (mounted) {
+        setState(() => _state = _BusTimeState.error);
+        await OfflineErrorHandler.show(context, const OfflineDisabledException());
+      }
+      return;
+    }
     try {
       final list = await BusService.instance.fetchBusTime(
         widget.busInfo,
@@ -55,7 +66,7 @@ class _BusTimePageState extends State<BusTimePage>
       final goList = <BusTime>[];
       final backList = <BusTime>[];
       for (final item in list) {
-        if (item.isGoBack == 'Y') {
+        if (item.direction == BusDirection.back) {
           backList.add(item);
         } else {
           goList.add(item);
@@ -76,7 +87,7 @@ class _BusTimePageState extends State<BusTimePage>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         automaticallyImplyLeading: widget.showAppBarLeading,
         title: Text(widget.busInfo.name),
@@ -98,7 +109,13 @@ class _BusTimePageState extends State<BusTimePage>
   Widget _buildBody(ColorScheme colorScheme) {
     switch (_state) {
       case _BusTimeState.loading:
-        return const Center(child: CircularProgressIndicator());
+        return Center(
+          child: CircularProgressIndicator(
+            color: LayoutStyleNotifier.instance.isLiquidGlass
+                ? colorScheme.primary
+                : null,
+          ),
+        );
       case _BusTimeState.error:
         return InkWell(
           onTap: _fetchData,
@@ -163,7 +180,12 @@ class _StopListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.fromLTRB(
+        0,
+        8,
+        0,
+        LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 8,
+      ),
       itemCount: stops.length,
       separatorBuilder: (_, __) => Divider(
         height: 1,
@@ -194,27 +216,30 @@ class _BusStopItem extends StatelessWidget {
     Color arrivedColor;
     double? fontSize;
 
-    if (busTime.arrivedTime != null) {
-      arrivedTimeText = busTime.arrivedTime!;
-      switch (busTime.arrivedTime) {
-        case '進站中':
-          arrivedTimeText = isEnglish ? 'Arriving' : '進站中';
-          arrivedColor = Colors.red;
-        case '將到站':
-          arrivedTimeText = isEnglish ? 'Coming\nSoon' : '將到站';
-          fontSize = 12.0;
-          arrivedColor = Colors.green;
-        default:
-          final postfix = int.tryParse(busTime.arrivedTime!) != null
-              ? (isEnglish ? ' min' : ' 分鐘')
-              : '';
-          arrivedTimeText = '$arrivedTimeText$postfix';
-          arrivedColor = colorScheme.bodyText;
-      }
-    } else {
-      arrivedTimeText = isEnglish ? 'Departed' : '已離站';
-      fontSize = 12.0;
-      arrivedColor = colorScheme.subtitleText;
+    switch (busTime.arrivalStatus) {
+      case BusArrivalStatus.arriving:
+        arrivedTimeText = isEnglish ? 'Arriving' : '進站中';
+        arrivedColor = Colors.red;
+      case BusArrivalStatus.comingSoon:
+        arrivedTimeText = isEnglish ? 'Coming\nSoon' : '將到站';
+        fontSize = 12.0;
+        arrivedColor = Colors.green;
+      case BusArrivalStatus.minutes:
+        final postfix = isEnglish ? ' min' : ' 分鐘';
+        arrivedTimeText = '${busTime.etaMinutes ?? 0}$postfix';
+        arrivedColor = colorScheme.bodyText;
+      case BusArrivalStatus.scheduled:
+        arrivedTimeText = busTime.scheduledTime ?? '';
+        arrivedColor = colorScheme.primary;
+        fontSize = 12.0;
+      case BusArrivalStatus.departed:
+        arrivedTimeText = isEnglish ? 'Departed' : '已離站';
+        arrivedColor = colorScheme.subtitleText;
+        fontSize = 12.0;
+      case BusArrivalStatus.notOperating:
+        arrivedTimeText = isEnglish ? 'Out of\nservice' : '未行駛';
+        arrivedColor = colorScheme.outline;
+        fontSize = 12.0;
     }
 
     return ListTile(

@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/course_query_service.dart'; // 請確認路徑是否正確
-import 'package:http/http.dart' as http; // ✅ 新增這行：用來發送網路請求
 import '../../theme/app_theme.dart';
-import '../../widgets/glass_dropdown.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_dropdown.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_bottom_sheet.dart';
+import '../../widgets/glass/glass_card.dart';
+import '../../services/http_client_factory.dart';
 
 class AssistantAddCoursePage extends StatefulWidget {
   final bool isInline;
@@ -73,6 +77,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _semesterOptions = sems;
         _semesterDisplayMap = displayMap;
@@ -81,6 +86,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
       });
     } catch (e) {
       debugPrint("載入學期清單失敗: $e");
+      if (!mounted) return;
       setState(() {
         _isSemesterLoading = false;
       });
@@ -110,6 +116,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
           prefs.getString('current_assistant_schedule_id') ?? 'default';
       final courseKey = _getCourseKey(currentScheduleId);
       String? jsonStr = prefs.getString(courseKey);
+      if (!mounted) return;
       if (jsonStr != null && jsonStr.isNotEmpty) {
         List<dynamic> decoded = jsonDecode(jsonStr);
         setState(() {
@@ -131,6 +138,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
   Future<void> _addCourseToAssistant(CourseJsonData courseData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       final currentScheduleId =
           prefs.getString('current_assistant_schedule_id') ?? 'default';
       final courseKey = _getCourseKey(currentScheduleId);
@@ -180,6 +188,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
       currentList.add(newCourse);
       await prefs.setString(courseKey, jsonEncode(currentList));
 
+      if (!mounted) return;
       setState(() {
         _existingAssistantCourseIds.add(courseData.id);
       });
@@ -194,9 +203,11 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("加入失敗：$e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("加入失敗：$e")));
+      }
     }
   }
 
@@ -211,14 +222,21 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
       semDisplay = "$syear-${sem}";
     }
 
-    final bodyContent = Stack(
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 750;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
+
+    final Widget bodyContent = Stack(
       children: [
         Column(
           children: [
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(8),
-              color: colorScheme.cardBackground,
+              color: isLiquidGlass
+                  ? Colors.transparent
+                  : colorScheme.cardBackground,
               child: ElevatedButton.icon(
                 onPressed: () {
                   if (widget.isInline) {
@@ -245,11 +263,18 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
                 ),
               ),
             ),
-            Divider(height: 1, color: colorScheme.borderColor),
+            Divider(
+              height: 1,
+              color: isLiquidGlass
+                  ? (isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06))
+                  : colorScheme.borderColor,
+            ),
             Expanded(child: _buildSearchResults()),
           ],
         ),
-        if (widget.isInline && _showInlineSearch)
+        if (widget.isInline && _showInlineSearch && !isTablet)
           Positioned(
             top: 62,
             left: 8,
@@ -259,49 +284,91 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
                 maxHeight: MediaQuery.of(context).size.height - 200,
               ),
               child: Material(
-                elevation: 8,
+                color: Colors.transparent,
+                elevation: isLiquidGlass ? 0 : 8,
                 borderRadius: BorderRadius.circular(12),
-                color: colorScheme.cardBackground,
                 child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: colorScheme.borderColor,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildSearchFormContent(
-                        context,
-                        isInlineSearch: true,
-                        onClose: () {
-                          setState(() {
-                            _showInlineSearch = false;
-                          });
-                        },
+                  decoration: isLiquidGlass
+                      ? BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                              : Colors.white.withValues(alpha: 0.90),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : Colors.black.withValues(alpha: 0.08),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        )
+                      : BoxDecoration(
+                          color: colorScheme.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.borderColor,
+                            width: 0.5,
+                          ),
+                        ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildSearchFormContent(
+                            context,
+                            isInlineSearch: true,
+                            onClose: () {
+                              setState(() {
+                                _showInlineSearch = false;
+                              });
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
+        if (isTablet && _showInlineSearch)
+          Positioned.fill(
+            child: Container(
+              decoration: isLiquidGlass
+                  ? (glassCardDecoration(context, borderRadius: 12)?.copyWith(
+                      color: isDark
+                          ? const Color(0xFF1E222D).withValues(alpha: 0.88)
+                          : Colors.white.withValues(alpha: 0.92),
+                    ))
+                  : BoxDecoration(color: colorScheme.cardBackground),
+              child: _buildInlineSearchView(colorScheme),
             ),
           ),
       ],
     );
 
     if (widget.isInline) {
-      return Scaffold(appBar: null, body: bodyContent);
+      return Scaffold(
+        appBar: null,
+        backgroundColor: isLiquidGlass ? Colors.transparent : null,
+        body: bodyContent,
+      );
     }
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: Text("新增課程"),
-        backgroundColor: colorScheme.scaffoldBackground,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : colorScheme.scaffoldBackground,
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
         foregroundColor: colorScheme.primaryText,
-        elevation: 0.5,
+        elevation: isLiquidGlass ? 0 : 0.5,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
       ),
       body: bodyContent,
     );
@@ -309,6 +376,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
 
   Widget _buildSearchResults() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_isQueryLoading) {
       return Center(
         child: Column(
@@ -350,248 +418,350 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
         final course = _searchResults[index];
         bool isAdded = _existingAssistantCourseIds.contains(course.id);
 
+        final cardChild = Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: widget.isInline ? 3 : 8,
+            ),
+            collapsedIconColor: colorScheme.subtitleText,
+            iconColor: colorScheme.subtitleText,
+            title: Text(
+              course.name.split('\n')[0],
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: widget.isInline ? 14 : 16,
+                color: colorScheme.primaryText,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: widget.isInline ? 2 : 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person,
+                          size: 14,
+                          color: colorScheme.subtitleText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          course.teacher,
+                          style: TextStyle(
+                            color: colorScheme.bodyText,
+                            fontSize: widget.isInline ? 12 : 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.subtleBackground,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        course.id,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.subtitleText,
+                        ),
+                      ),
+                    ),
+                    _buildProbabilityChip(course, colorScheme),
+                  ],
+                ),
+              ],
+            ),
+            trailing: isAdded
+                ? Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: widget.isInline ? 26 : 32,
+                  )
+                : ElevatedButton(
+                    onPressed: () => _addCourseToAssistant(course),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[600],
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: widget.isInline ? 8 : 12,
+                      ),
+                      minimumSize: Size(
+                        widget.isInline ? 56 : 60,
+                        widget.isInline ? 28 : 32,
+                      ),
+                    ),
+                    child: Text(
+                      "加入排課",
+                      style: TextStyle(fontSize: widget.isInline ? 12 : 14),
+                    ),
+                  ),
+            children: [
+              Divider(height: 1, thickness: 1, color: colorScheme.borderColor),
+              Container(
+                color: isLiquidGlass
+                    ? Colors.transparent
+                    : colorScheme.primaryContainer.withValues(alpha: 0.15),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.school,
+                            "系所",
+                            course.department,
+                            colorScheme,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.grade,
+                            "學分",
+                            course.credit,
+                            colorScheme,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.class_,
+                            "班級",
+                            "${course.grade}年級 ${course.className}",
+                            colorScheme,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.room,
+                            "教室",
+                            _parseRoomLocation(course.room),
+                            colorScheme,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.people,
+                            "名額 / 已選 / 餘額",
+                            "${course.restrict} / ${course.select} / ${course.remaining}",
+                            colorScheme,
+                            valueColor: course.remaining > 0
+                                ? (colorScheme.isDark
+                                      ? Colors.green[300]
+                                      : Colors.green[700])
+                                : Colors.redAccent,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.pie_chart,
+                            "選上機率",
+                            _calculateProbability(course),
+                            colorScheme,
+                            valueColor: colorScheme.isDark
+                                ? Colors.orange[300]
+                                : Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "上課時間表",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.subtitleText,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildTimeDisplay(course.classTime, colorScheme),
+                    // ✅ 新增：評分方式區塊
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "評分方式",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.subtitleText,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // 使用 FutureBuilder 動態載入
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FutureBuilder<List<String>>(
+                        future: _getCourseEvaluation(course.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          }
+                          if (snapshot.hasError ||
+                              !snapshot.hasData ||
+                              snapshot.data!.isEmpty) {
+                            return Text(
+                              "無法取得評分資料",
+                              style: TextStyle(
+                                color: colorScheme.subtitleText,
+                                fontSize: 13,
+                              ),
+                            );
+                          }
+                          // 渲染抓取到的評分清單
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: snapshot.data!
+                                .map(
+                                  (e) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6.0),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            e,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: colorScheme.primaryText,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (isLiquidGlass) {
+          return Container(
+            margin: EdgeInsets.only(bottom: widget.isInline ? 8 : 12),
+            clipBehavior: Clip.antiAlias,
+            decoration:
+                glassCardDecoration(context, borderRadius: 15) ??
+                const BoxDecoration(color: Colors.transparent),
+            child: Material(color: Colors.transparent, child: cardChild),
+          );
+        }
         return Card(
           elevation: 2,
           color: colorScheme.cardBackground,
           margin: EdgeInsets.only(bottom: widget.isInline ? 8 : 12),
           clipBehavior: Clip.antiAlias,
-          child: Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: widget.isInline ? 3 : 8,
-              ),
-              collapsedIconColor: colorScheme.subtitleText,
-              iconColor: colorScheme.subtitleText,
-              title: Text(
-                course.name.split('\n')[0],
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: widget.isInline ? 14 : 16,
-                  color: colorScheme.primaryText,
-                ),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: widget.isInline ? 2 : 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.person,
-                        size: 14,
-                        color: colorScheme.subtitleText,
-                      ),
-                      const SizedBox(width: 4),
-                      // ✅ 加入 Flexible 與 maxLines、overflow 設定來限制文字長度
-                      Flexible(
-                        child: Text(
-                          course.teacher,
-                          style: TextStyle(color: colorScheme.bodyText),
-                          maxLines: 1, // 限制只能單行
-                          overflow: TextOverflow.ellipsis, // 太長就顯示 ...
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.subtleBackground,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          course.id,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorScheme.subtitleText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              trailing: isAdded
-                  ? Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: widget.isInline ? 26 : 32,
-                    )
-                  : ElevatedButton(
-                      onPressed: () => _addCourseToAssistant(course),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[600],
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: widget.isInline ? 8 : 12,
-                        ),
-                        minimumSize: Size(
-                          widget.isInline ? 56 : 60,
-                          widget.isInline ? 28 : 32,
-                        ),
-                      ),
-                      child: Text(
-                        "加入排課",
-                        style: TextStyle(fontSize: widget.isInline ? 12 : 14),
-                      ),
-                    ),
-              children: [
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: colorScheme.borderColor,
-                ),
-                Container(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.15),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.school,
-                              "系所",
-                              course.department,
-                              colorScheme,
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.grade,
-                              "學分",
-                              course.credit,
-                              colorScheme,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.class_,
-                              "班級",
-                              "${course.grade}年級 ${course.className}",
-                              colorScheme,
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.room,
-                              "教室",
-                              _parseRoomLocation(course.room),
-                              colorScheme,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "上課時間表",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.subtitleText,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildTimeDisplay(course.classTime, colorScheme),
-                      // ✅ 新增：評分方式區塊
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "評分方式",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.subtitleText,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // 使用 FutureBuilder 動態載入
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: FutureBuilder<List<String>>(
-                          future: _getCourseEvaluation(course.id),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              );
-                            }
-                            if (snapshot.hasError ||
-                                !snapshot.hasData ||
-                                snapshot.data!.isEmpty) {
-                              return Text(
-                                "無法取得評分資料",
-                                style: TextStyle(
-                                  color: colorScheme.subtitleText,
-                                  fontSize: 13,
-                                ),
-                              );
-                            }
-                            // 渲染抓取到的評分清單
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: snapshot.data!
-                                  .map(
-                                    (e) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 6.0,
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              e,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: colorScheme.primaryText,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: cardChild,
         );
       },
+    );
+  }
+
+  String _calculateProbability(CourseJsonData course) {
+    if (course.remaining <= 0) return "0% (已滿)";
+    double prob = course.remaining / course.select;
+    if (course.select <= 0 || prob > 1) return "100%";
+    return "${(prob * 100).toStringAsFixed(1)}%";
+  }
+
+  Widget _buildProbabilityChip(CourseJsonData course, ColorScheme colorScheme) {
+    double prob = 1.0;
+    if (course.remaining <= 0) {
+      prob = 0.0;
+    } else if (course.select > 0) {
+      prob = course.remaining / course.select;
+      if (prob > 1.0) prob = 1.0;
+    }
+
+    final isDark = colorScheme.isDark;
+    Color backgroundColor;
+    Color textColor;
+
+    if (prob >= 0.7) {
+      backgroundColor = isDark
+          ? Colors.green[900]!.withValues(alpha: 0.3)
+          : Colors.green[50]!;
+      textColor = isDark ? Colors.green[200]! : Colors.green[800]!;
+    } else if (prob >= 0.3) {
+      backgroundColor = isDark
+          ? Colors.orange[900]!.withValues(alpha: 0.3)
+          : Colors.orange[50]!;
+      textColor = isDark ? Colors.orange[200]! : Colors.orange[800]!;
+    } else {
+      backgroundColor = isDark
+          ? Colors.red[900]!.withValues(alpha: 0.3)
+          : Colors.red[50]!;
+      textColor = isDark ? Colors.red[200]! : Colors.red[800]!;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "機率: ${_calculateProbability(course)}",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -599,8 +769,9 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
     IconData icon,
     String label,
     String value,
-    ColorScheme colorScheme,
-  ) {
+    ColorScheme colorScheme, {
+    Color? valueColor,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -619,7 +790,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: colorScheme.primaryText,
+                  color: valueColor ?? colorScheme.primaryText,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -909,7 +1080,9 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
 
   void _showSearchSheet() {
     final colorScheme = Theme.of(context).colorScheme;
-    showModalBottomSheet(
+    final isDark = colorScheme.isDark;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    showGlassModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: colorScheme.cardBackground,
@@ -925,7 +1098,7 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
               maxChildSize: 0.95,
               expand: false,
               builder: (context, scrollController) {
-                return SingleChildScrollView(
+                final formContent = SingleChildScrollView(
                   controller: scrollController,
                   padding: EdgeInsets.only(
                     left: 20,
@@ -939,6 +1112,24 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
                     onClose: () => Navigator.pop(context),
                     setModalState: setModalState,
                   ),
+                );
+                if (!isLiquidGlass) return formContent;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                        : Colors.white.withValues(alpha: 0.90),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.08),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: formContent,
                 );
               },
             );
@@ -978,13 +1169,14 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
         dept: _deptCtrl.text.trim(),
       );
 
+      if (!mounted) return;
       setState(() {
         _searchResults = results;
         _isQueryLoading = false;
       });
     } catch (e) {
-      setState(() => _isQueryLoading = false);
       if (mounted) {
+        setState(() => _isQueryLoading = false);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text("搜尋失敗或資料載入錯誤: $e")));
@@ -1028,6 +1220,18 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
     String? hint,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
+    final Color fill = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.white.withValues(alpha: 0.4))
+        : colorScheme.subtleBackground;
+    final Color borderCol = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.35)
+              : Colors.black.withValues(alpha: 0.08))
+        : colorScheme.borderColor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1054,10 +1258,21 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
               horizontal: 12,
               vertical: 8,
             ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: borderCol, width: 1.0),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: borderCol, width: 1.0),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+            ),
             isDense: true,
             filled: true,
-            fillColor: colorScheme.subtleBackground,
+            fillColor: fill,
           ),
         ),
       ],
@@ -1093,7 +1308,9 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
     );
 
     try {
-      final response = await http.get(url);
+      final client = createHttpClient();
+      final response = await client.get(url);
+      client.close();
       if (response.statusCode == 200) {
         // 中山舊系統編碼處理
         String html = utf8.decode(response.bodyBytes, allowMalformed: true);
@@ -1127,5 +1344,28 @@ class _AssistantAddCoursePageState extends State<AssistantAddCoursePage> {
       return ["載入失敗，請稍後再試"];
     }
     return ["查無資料"];
+  }
+
+  // ✅ 新增：寬螢幕下在右側面板內嵌顯示搜尋面板的元件
+  Widget _buildInlineSearchView(ColorScheme colorScheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: _buildSearchFormContent(
+              context,
+              isInlineSearch: true,
+              onClose: () {
+                setState(() {
+                  _showInlineSearch = false;
+                });
+              },
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/score_item.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../widgets/glass/glass_dropdown.dart';
 
 /// 遷移映射資料
 class MigrationMapping {
@@ -244,7 +244,7 @@ class _ScoreMigrationDialogState extends State<ScoreMigrationDialog> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: hasScore
-                        ? colorScheme.accentBlue.withOpacity(0.3)
+                        ? colorScheme.accentBlue.withValues(alpha: 0.3)
                         : colorScheme.borderColor,
                   ),
                 ),
@@ -270,7 +270,7 @@ class _ScoreMigrationDialogState extends State<ScoreMigrationDialog> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -378,7 +378,7 @@ class _ScoreMigrationDialogState extends State<ScoreMigrationDialog> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: hasSource
-                        ? Colors.green.withOpacity(0.3)
+                        ? Colors.green.withValues(alpha: 0.3)
                         : colorScheme.borderColor,
                   ),
                 ),
@@ -440,7 +440,7 @@ class _ScoreMigrationDialogState extends State<ScoreMigrationDialog> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
+                            color: Colors.blue.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(

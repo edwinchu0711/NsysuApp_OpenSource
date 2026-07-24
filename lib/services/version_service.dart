@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:io'; // ★ 需要引入 dart:io 來判斷 Platform
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // ★ 新增引入
+import 'http_client_factory.dart';
 // var time = 86400000;
 var time = 5;
 // ★ 新增一個類別來回傳檢查結果，方便 UI 直接使用
@@ -78,7 +79,9 @@ class VersionService {
     }
 
     try {
-      final response = await http.get(Uri.parse(_url));
+      final client = createHttpClient();
+      final response = await client.get(Uri.parse(_url));
+      client.close();
       if (response.statusCode == 200) {
         await prefs.setInt(_lastFetchKey, now);
         await prefs.setString(_cacheDataKey, response.body);

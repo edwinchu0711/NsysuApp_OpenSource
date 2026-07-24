@@ -5,7 +5,11 @@ import '../../models/course_model.dart';
 import '../../services/course_query_service.dart'; // 確認你的 service 路徑正確
 import 'package:flutter/services.dart'; // 加上這行來使用 Clipboard
 import '../../theme/app_theme.dart';
-import '../../widgets/glass_dropdown.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_dropdown.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_dialog.dart';
+import '../../widgets/glass/glass_card.dart';
 
 
 class AssistantImportPage extends StatefulWidget {
@@ -77,7 +81,7 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
   Future<void> _processImport() async {
     final String input = _textController.text;
     if (input.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("請先貼上程式碼！")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("請先貼上程式碼！"), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -150,19 +154,16 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
     } catch (e) {
       if (mounted) {
         final colorScheme = Theme.of(context).colorScheme;
-        showDialog(
+        showGlassDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: colorScheme.cardBackground,
-            title: Text("匯入失敗", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primaryText)),
-            content: Text(e.toString(), style: TextStyle(color: colorScheme.bodyText)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context), 
-                child: Text("確定", style: TextStyle(color: colorScheme.primary))
-              )
-            ],
-          ),
+          title: Text("匯入失敗", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primaryText)),
+          content: Text(e.toString(), style: TextStyle(color: colorScheme.bodyText)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: Text("確定", style: TextStyle(color: colorScheme.primary))
+            )
+          ],
         );
       }
     } finally {
@@ -182,7 +183,7 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("剪貼簿內沒有文字！")),
+          const SnackBar(content: Text("剪貼簿內沒有文字！"), duration: const Duration(seconds: 2)),
         );
       }
     }
@@ -220,53 +221,63 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
 
   void _showResultDialog(int success, int skip, List<String> fails) {
     final colorScheme = Theme.of(context).colorScheme;
-    showDialog(
+    showGlassDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: colorScheme.cardBackground,
-        title: Text("匯入結果", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primaryText)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("✅ 成功匯入: $success 筆", style: TextStyle(color: colorScheme.bodyText)),
-            if (skip > 0) Text("⏭️ 已存在跳過: $skip 筆", style: TextStyle(color: colorScheme.bodyText)),
-            if (fails.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text("❌ 找不到課程:", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              Text(fails.join(", "), style: const TextStyle(color: Colors.red, fontSize: 13)),
-            ]
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // 關閉 Dialog
-              if (widget.isInline) {
-                widget.onImportSuccess?.call();
-              } else {
-                Navigator.pop(context, true); // 關閉匯入頁面並回傳 true 要求重整
-              }
-            },
-            child: Text("確定並返回", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
-          )
+      title: Text("匯入結果", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primaryText)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("✅ 成功匯入: $success 筆", style: TextStyle(color: colorScheme.bodyText)),
+          if (skip > 0) Text("⏭️ 已存在跳過: $skip 筆", style: TextStyle(color: colorScheme.bodyText)),
+          if (fails.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text("❌ 找不到課程:", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            Text(fails.join(", "), style: const TextStyle(color: Colors.red, fontSize: 13)),
+          ]
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context, rootNavigator: true).pop(); // 關閉 Dialog
+            if (widget.isInline) {
+              widget.onImportSuccess?.call();
+            } else {
+              Navigator.pop(context, true); // 關閉匯入頁面並回傳 true 要求重整
+            }
+          },
+          child: Text("確定並返回", style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+        )
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     final bodyContent = Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.only(
+        left: 16.0,
+        right: 16.0,
+        top: 16.0,
+        bottom: (widget.isInline && isLiquidGlass) ? 100.0 : 16.0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
+            decoration: isLiquidGlass
+                ? (glassCardDecoration(context, borderRadius: 12) ??
+                    BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ))
+                : BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -339,9 +350,41 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
               decoration: InputDecoration(
                 hintText: "貼上從選課小幫手複製的程式碼...",
                 hintStyle: TextStyle(color: colorScheme.outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: isLiquidGlass
+                        ? (isDark
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : Colors.black.withValues(alpha: 0.08))
+                        : colorScheme.outline,
+                    width: 1.0,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: isLiquidGlass
+                        ? (isDark
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : Colors.black.withValues(alpha: 0.08))
+                        : colorScheme.outline,
+                    width: 1.0,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colorScheme.primary,
+                    width: 1.5,
+                  ),
+                ),
                 filled: true,
-                fillColor: colorScheme.surfaceVariant,
+                fillColor: isLiquidGlass
+                    ? (isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.white.withValues(alpha: 0.4))
+                    : colorScheme.surfaceVariant,
               ),
             ),
           ),
@@ -368,18 +411,176 @@ class _AssistantImportPageState extends State<AssistantImportPage> {
       ),
     );
 
+    if (widget.isInline && isLiquidGlass) {
+      return Scaffold(
+        appBar: null,
+        backgroundColor: Colors.transparent,
+        body: _buildScrollableImportBody(context, colorScheme, isLiquidGlass, isDark),
+      );
+    }
+
     if (widget.isInline) {
       return Scaffold(
         appBar: null,
+        backgroundColor: isLiquidGlass ? Colors.transparent : null,
         body: bodyContent,
       );
     }
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("匯入自選課小幫手"),
       ),
       body: bodyContent,
+    );
+  }
+
+  Widget _buildScrollableImportBody(BuildContext context, ColorScheme colorScheme, bool isLiquidGlass, bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: isLiquidGlass
+                ? (glassCardDecoration(context, borderRadius: 12) ??
+                    BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ))
+                : BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text("匯入說明", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.onPrimaryContainer)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text("請至「中山選課小幫手網頁版」匯出加選課程，將產生的完整 JavaScript 程式碼複製並貼在下方欄位中。", style: TextStyle(color: colorScheme.onPrimaryContainer)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_isSemesterLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Center(
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (_semesterOptions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: GlassSingleSelectDropdown(
+                label: "選擇學期",
+                value: _selectedSemester ?? "",
+                items: _semesterOptions,
+                displayMap: _semesterDisplayMap,
+                onChanged: (v) {
+                  setState(() {
+                    _selectedSemester = v;
+                  });
+                },
+              ),
+            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "程式碼內容：",
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant),
+              ),
+              TextButton.icon(
+                onPressed: _pasteFromClipboard,
+                icon: const Icon(Icons.paste, size: 18),
+                label: const Text("剪貼簿貼上"),
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(
+            height: 200,
+            child: TextField(
+              controller: _textController,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: TextStyle(color: colorScheme.onSurface),
+              decoration: InputDecoration(
+                hintText: "貼上從選課小幫手複製的程式碼...",
+                hintStyle: TextStyle(color: colorScheme.outline),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: isLiquidGlass
+                        ? (isDark
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : Colors.black.withValues(alpha: 0.08))
+                        : colorScheme.outline,
+                    width: 1.0,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: isLiquidGlass
+                        ? (isDark
+                              ? Colors.white.withValues(alpha: 0.35)
+                              : Colors.black.withValues(alpha: 0.08))
+                        : colorScheme.outline,
+                    width: 1.0,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colorScheme.primary,
+                    width: 1.5,
+                  ),
+                ),
+                filled: true,
+                fillColor: isLiquidGlass
+                    ? (isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.white.withValues(alpha: 0.4))
+                    : colorScheme.surfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isImporting ? null : _processImport,
+              icon: _isImporting 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.download),
+              label: Text(
+                _isImporting ? "正在搜尋並匯入..." : "開始匯入",
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
     );
   }
 }

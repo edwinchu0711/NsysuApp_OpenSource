@@ -2,11 +2,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:uuid/uuid.dart';
-import 'package:collection/collection.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_dialog.dart';
+import '../widgets/glass/glass_card.dart';
+import '../services/http_client_factory.dart';
 
 // ---------------------------------------------------------------------------
 // 1. Data Models (資料模型)
@@ -77,7 +81,9 @@ class CalendarService {
 
     if (shouldFetch) {
       try {
-        final response = await http.get(Uri.parse(_schoolDataUrl));
+        final client = createHttpClient();
+        final response = await client.get(Uri.parse(_schoolDataUrl));
+        client.close();
         if (response.statusCode == 200) {
           cachedJson = utf8.decode(response.bodyBytes);
           await prefs.setString(_prefKeySchoolData, cachedJson);
@@ -216,8 +222,10 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final data = await _service.fetchAllData();
+    if (!mounted) return;
 
     List<CalendarEvent> school = data['schoolEvents'];
     List<CalendarEvent> user = data['userEvents'];
@@ -260,6 +268,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   // ★ 檢查該月份是否有任何一週在學期週次範圍內
   void _checkIfMonthHasSemesterWeeks(DateTime focusedDay) {
+    if (!mounted) return;
     if (_semesterStartDates.isEmpty) {
       if (_shouldShowWeekNumber) setState(() => _shouldShowWeekNumber = false);
       return;
@@ -345,7 +354,11 @@ class _CalendarPageState extends State<CalendarPage> {
     }
 
     // 2. 估算該週的代表日期（如該週的星期三），並調整使其週次符合 weekNumber
-    DateTime targetMidWeek = DateTime(targetYear, 1, 1).add(Duration(days: (weekNumber - 1) * 7 + 3));
+    DateTime targetMidWeek = DateTime(
+      targetYear,
+      1,
+      1,
+    ).add(Duration(days: (weekNumber - 1) * 7 + 3));
     int calculatedWeek = _getWeekOfYear(targetMidWeek);
     if (calculatedWeek != weekNumber) {
       for (int offset = -7; offset <= 7; offset++) {
@@ -360,8 +373,12 @@ class _CalendarPageState extends State<CalendarPage> {
     // 3. 比對所有學期開始日期，找出相符的週次
     for (var startDate in _semesterStartDates) {
       final start = DateTime(startDate.year, startDate.month, startDate.day);
-      final startOfWeekStart = start.subtract(Duration(days: start.weekday - 1));
-      final targetOfWeek = targetMidWeek.subtract(Duration(days: targetMidWeek.weekday - 1));
+      final startOfWeekStart = start.subtract(
+        Duration(days: start.weekday - 1),
+      );
+      final targetOfWeek = targetMidWeek.subtract(
+        Duration(days: targetMidWeek.weekday - 1),
+      );
       final diffDays = targetOfWeek.difference(startOfWeekStart).inDays;
       final weekIndex = (diffDays / 7).floor() + 1;
 
@@ -383,12 +400,10 @@ class _CalendarPageState extends State<CalendarPage> {
     if (_semesterStartDates.isEmpty) return null;
 
     for (var startDate in _semesterStartDates) {
-      final start = DateTime(
-        startDate.year,
-        startDate.month,
-        startDate.day,
+      final start = DateTime(startDate.year, startDate.month, startDate.day);
+      final startOfWeekStart = start.subtract(
+        Duration(days: start.weekday - 1),
       );
-      final startOfWeekStart = start.subtract(Duration(days: start.weekday - 1));
       final targetOfWeek = day.subtract(Duration(days: day.weekday - 1));
 
       final diffDays = targetOfWeek.difference(startOfWeekStart).inDays;
@@ -463,74 +478,68 @@ class _CalendarPageState extends State<CalendarPage> {
     DateTime tempDate = _selectedDay ?? DateTime.now();
     final colorScheme = Theme.of(context).colorScheme;
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: colorScheme.cardBackground,
-        title: Text(
-          "新增個人事項",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.primaryText,
-          ),
+      title: Text(
+        "新增個人事項",
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: colorScheme.primaryText,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: titleController,
-              style: TextStyle(color: colorScheme.primaryText),
-              decoration: InputDecoration(
-                labelText: "事項內容",
-                labelStyle: TextStyle(color: colorScheme.subtitleText),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: colorScheme.borderColor),
-                ),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: colorScheme.primary),
-                ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: titleController,
+            style: TextStyle(color: colorScheme.primaryText),
+            decoration: InputDecoration(
+              labelText: "事項內容",
+              labelStyle: TextStyle(color: colorScheme.subtitleText),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: colorScheme.borderColor),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: colorScheme.primary),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              "日期: ${DateFormat('yyyy/MM/dd').format(tempDate)}",
-              style: TextStyle(color: colorScheme.bodyText),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              "取消",
-              style: TextStyle(color: colorScheme.subtitleText),
-            ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.isNotEmpty) {
-                final newEvent = CalendarEvent(
-                  id: const Uuid().v4(),
-                  title: titleController.text,
-                  date: tempDate,
-                  type: EventType.user,
-                );
-                await _service.saveUserEvent(newEvent);
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadData();
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text("新增"),
+          const SizedBox(height: 16),
+          Text(
+            "日期: ${DateFormat('yyyy/MM/dd').format(tempDate)}",
+            style: TextStyle(color: colorScheme.bodyText),
           ),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: Text("取消", style: TextStyle(color: colorScheme.subtitleText)),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            if (titleController.text.isNotEmpty) {
+              final newEvent = CalendarEvent(
+                id: const Uuid().v4(),
+                title: titleController.text,
+                date: tempDate,
+                type: EventType.user,
+              );
+              await _service.saveUserEvent(newEvent);
+              if (mounted) {
+                Navigator.of(context, rootNavigator: true).pop();
+                _loadData();
+              }
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: colorScheme.primary,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text("新增"),
+        ),
+      ],
     );
   }
 
@@ -538,7 +547,7 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isWide = MediaQuery.of(context).size.width >= 800;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         automaticallyImplyLeading: !_isSearching,
         title: _isSearching
@@ -593,7 +602,13 @@ class _CalendarPageState extends State<CalendarPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                color: LayoutStyleNotifier.instance.isLiquidGlass
+                    ? colorScheme.primary
+                    : null,
+              ),
+            )
           : _buildBody(),
       floatingActionButton: (!_isSearching && isWide)
           ? FloatingActionButton(
@@ -801,12 +816,20 @@ class _CalendarPageState extends State<CalendarPage> {
 
           calendarBuilders: CalendarBuilders(
             weekNumberBuilder: (context, weekNumber) {
-              final text = _convertWeekNumberToSemesterWeek(weekNumber, _focusedDay);
+              final text = _convertWeekNumberToSemesterWeek(
+                weekNumber,
+                _focusedDay,
+              );
               if (text.isEmpty) return const SizedBox();
               final colorScheme = Theme.of(context).colorScheme;
+              final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
               return Container(
                 decoration: BoxDecoration(
-                  color: colorScheme.subtleBackground,
+                  color: isLiquidGlass
+                      ? (colorScheme.isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.03))
+                      : colorScheme.subtleBackground,
                   border: Border(
                     right: BorderSide(color: colorScheme.borderColor),
                   ),
@@ -832,7 +855,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 child: Text(
                   '${day.day}',
                   style: TextStyle(
-                    color: colorScheme.subtitleText.withOpacity(0.4),
+                    color: colorScheme.subtitleText.withValues(alpha: 0.4),
                   ),
                 ),
               );
@@ -868,7 +891,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     width: 5,
                     height: 5,
                     decoration: BoxDecoration(
-                      color: colorScheme.subtitleText.withOpacity(0.4),
+                      color: colorScheme.subtitleText.withValues(alpha: 0.4),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -913,8 +936,10 @@ class _CalendarPageState extends State<CalendarPage> {
       ],
     );
 
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
     final eventsPane = Container(
-      color: colorScheme.pageBackground,
+      color: isLiquidGlass ? Colors.transparent : colorScheme.pageBackground,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -927,7 +952,11 @@ class _CalendarPageState extends State<CalendarPage> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: colorScheme.secondaryCardBackground,
+                  color: isLiquidGlass
+                      ? (colorScheme.isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.04))
+                      : colorScheme.secondaryCardBackground,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1001,7 +1030,12 @@ class _CalendarPageState extends State<CalendarPage> {
                   )
                 : ListView.builder(
                     itemCount: currentEvents.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.fromLTRB(
+                      12,
+                      0,
+                      12,
+                      LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+                    ),
                     itemBuilder: (context, index) {
                       return _buildEventCard(currentEvents[index]);
                     },
@@ -1042,6 +1076,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isWide = MediaQuery.of(context).size.width >= 800;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     Color? bgColor;
     Color textColor = colorScheme.primaryText;
     BoxDecoration? decoration;
@@ -1050,10 +1085,16 @@ class _CalendarPageState extends State<CalendarPage> {
       bgColor = colorScheme.primary;
       textColor = colorScheme.onPrimary;
     } else if (isToday) {
-      bgColor = colorScheme.isDark ? const Color(0xFF1E2D4A) : Colors.blue[200];
+      bgColor = isLiquidGlass
+          ? colorScheme.primary.withValues(
+              alpha: colorScheme.isDark ? 0.25 : 0.3,
+            )
+          : (colorScheme.isDark ? const Color(0xFF1E2D4A) : Colors.blue[200]);
       textColor = colorScheme.isDark ? Colors.white : Colors.black;
     } else if (isHoliday) {
-      bgColor = colorScheme.isDark ? const Color(0xFF3A1E1E) : Colors.red[50];
+      bgColor = isLiquidGlass
+          ? Colors.red.withValues(alpha: colorScheme.isDark ? 0.18 : 0.12)
+          : (colorScheme.isDark ? const Color(0xFF3A1E1E) : Colors.red[50]);
     }
 
     if (isSelected || isToday) {
@@ -1095,6 +1136,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildListViewLayout() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_allEvents.isEmpty) {
       return const Center(child: Text("目前沒有任何行事曆資料"));
     }
@@ -1106,7 +1148,12 @@ class _CalendarPageState extends State<CalendarPage> {
     return ListView.builder(
       controller: _listScrollController,
       itemCount: _groupedEvents.keys.length,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 16,
+      ),
       itemBuilder: (context, index) {
         final sortedDates = _groupedEvents.keys.toList()..sort();
         final date = sortedDates[index];
@@ -1147,7 +1194,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Divider(
-                        color: colorScheme.accentBlue.withOpacity(0.3),
+                        color: colorScheme.accentBlue.withValues(alpha: 0.3),
                       ),
                     ),
                   ],
@@ -1157,9 +1204,13 @@ class _CalendarPageState extends State<CalendarPage> {
             Container(
               decoration: isHoliday
                   ? BoxDecoration(
-                      color: colorScheme.isDark
-                          ? const Color(0xFF3A1E1E)
-                          : Colors.red[50],
+                      color: isLiquidGlass
+                          ? Colors.red.withValues(
+                              alpha: colorScheme.isDark ? 0.18 : 0.12,
+                            )
+                          : (colorScheme.isDark
+                                ? const Color(0xFF3A1E1E)
+                                : Colors.red[50]),
                       borderRadius: BorderRadius.circular(8),
                     )
                   : null,
@@ -1188,53 +1239,66 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildEventCard(CalendarEvent event, {bool showDate = false}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     bool isUser = event.type == EventType.user;
     final isWide = MediaQuery.of(context).size.width >= 800;
-    return Card(
-      elevation: 1,
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      color: colorScheme.cardBackground,
-      child: ListTile(
-        visualDensity: VisualDensity.compact,
-        leading: Container(
-          width: 4,
-          height: double.infinity,
-          color: isUser ? Colors.pinkAccent : Colors.orange,
-        ),
-        title: Text(
-          event.title,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 15,
-            color: colorScheme.primaryText,
-          ),
-        ),
-        subtitle: showDate
-            ? Text(
-                DateFormat('yyyy/MM/dd (E)', 'zh_TW').format(event.date),
-                style: TextStyle(fontSize: 12, color: colorScheme.subtitleText),
-              )
-            : (isUser
-                  ? const Text(
-                      "個人事項",
-                      style: TextStyle(fontSize: 12, color: Colors.pinkAccent),
-                    )
-                  : null),
-        trailing: isUser && isWide
-            ? IconButton(
-                icon: Icon(
-                  Icons.delete_outline,
-                  color: colorScheme.subtitleText,
-                  size: 20,
-                ),
-                onPressed: () async {
-                  await _service.removeUserEvent(event.id);
-                  _loadData();
-                },
-              )
-            : null,
+    final Widget tileChild = ListTile(
+      visualDensity: VisualDensity.compact,
+      leading: Container(
+        width: 4,
+        height: double.infinity,
+        color: isUser ? Colors.pinkAccent : Colors.orange,
       ),
+      title: Text(
+        event.title,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 15,
+          color: colorScheme.primaryText,
+        ),
+      ),
+      subtitle: showDate
+          ? Text(
+              DateFormat('yyyy/MM/dd (E)', 'zh_TW').format(event.date),
+              style: TextStyle(fontSize: 12, color: colorScheme.subtitleText),
+            )
+          : (isUser
+                ? const Text(
+                    "個人事項",
+                    style: TextStyle(fontSize: 12, color: Colors.pinkAccent),
+                  )
+                : null),
+      trailing: isUser && isWide
+          ? IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: colorScheme.subtitleText,
+                size: 20,
+              ),
+              onPressed: () async {
+                await _service.removeUserEvent(event.id);
+                if (mounted) {
+                  _loadData();
+                }
+              },
+            )
+          : null,
     );
+    return isLiquidGlass
+        ? Container(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(context, borderRadius: 8),
+            child: tileChild,
+          )
+        : Card(
+            elevation: 1,
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            color: colorScheme.cardBackground,
+            child: tileChild,
+          );
   }
 }

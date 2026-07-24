@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/department_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/searchable_dropdown_field.dart';
+import 'glass/glass_card.dart';
 
 class CourseProgressProfileBar extends StatefulWidget {
   final List<DeptOption> departments;
@@ -11,6 +12,7 @@ class CourseProgressProfileBar extends StatefulWidget {
   final bool isDirty;
   final VoidCallback onFieldChanged;
   final void Function(String dept, String doubleMajor, String minor) onSave;
+  final ValueChanged<bool>? onExpansionChanged;
 
   const CourseProgressProfileBar({
     super.key,
@@ -21,6 +23,7 @@ class CourseProgressProfileBar extends StatefulWidget {
     required this.isDirty,
     required this.onFieldChanged,
     required this.onSave,
+    this.onExpansionChanged,
   });
 
   @override
@@ -55,6 +58,11 @@ class _CourseProgressProfileBarState extends State<CourseProgressProfileBar> {
       _deptController.text = widget.savedDept;
       if (oldWidget.savedDept.isEmpty && widget.savedDept.isNotEmpty) {
         _isExpanded = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onExpansionChanged?.call(false);
+          }
+        });
       }
     }
     if (widget.savedDoubleMajor != oldWidget.savedDoubleMajor) {
@@ -104,6 +112,7 @@ class _CourseProgressProfileBarState extends State<CourseProgressProfileBar> {
       setState(() {
         _isExpanded = false;
       });
+      widget.onExpansionChanged?.call(false);
     }
   }
 
@@ -117,14 +126,16 @@ class _CourseProgressProfileBarState extends State<CourseProgressProfileBar> {
           setState(() {
             _isExpanded = true;
           });
+          widget.onExpansionChanged?.call(true);
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: colorScheme.cardBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.borderColor),
-          ),
+          decoration: glassCardDecoration(context, borderRadius: 12) ??
+              BoxDecoration(
+                color: colorScheme.cardBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.borderColor),
+              ),
           child: Row(
             children: [
               Icon(
@@ -160,11 +171,12 @@ class _CourseProgressProfileBarState extends State<CourseProgressProfileBar> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -186,6 +198,7 @@ class _CourseProgressProfileBarState extends State<CourseProgressProfileBar> {
                     setState(() {
                       _isExpanded = false;
                     });
+                    widget.onExpansionChanged?.call(false);
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),

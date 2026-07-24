@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
 import '../utils/utils.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class LoginPasswordErrorException implements Exception {
   final String message;
@@ -22,13 +23,13 @@ class OpenScoreService {
     loadFromCache();
   }
 
-  http.Client _client = http.Client();
+  http.Client _client = createHttpClient();
 
   void _recreateClient() {
     try {
       _client.close();
     } catch (_) {}
-    _client = http.Client();
+    _client = createHttpClient();
   }
 
   static const String CACHE_KEY = "cached_open_scores_plain_v1";
@@ -48,7 +49,8 @@ class OpenScoreService {
     null,
   );
 
-  static bool _hasChinese(String input) => RegExp(r"[\u4e00-\u9fff]").hasMatch(input);
+  static bool _hasChinese(String input) =>
+      RegExp(r"[\u4e00-\u9fff]").hasMatch(input);
 
   /// [讀取快取]：將 JSON 字串安全轉換為正確的 List<Map> 結構
   Future<void> loadFromCache() async {
@@ -139,7 +141,6 @@ class OpenScoreService {
     isLoadingNotifier.value = true;
     progressNotifier.value = 0.0;
     statusMessageNotifier.value = "檢查身分中...";
-    final sw = Stopwatch()..start();
 
     try {
       // 確保在嘗試抓取前，記憶體至少有舊的快取資料
@@ -439,7 +440,9 @@ class OpenScoreService {
           var texts = cols.map((e) => e.text.trim()).toList();
           String itemTitle = texts.length > 2 ? texts[2] : "";
 
-          if (itemTitle.isNotEmpty && itemTitle != "項目" && itemTitle != "評分項目") {
+          if (itemTitle.isNotEmpty &&
+              itemTitle != "項目" &&
+              itemTitle != "評分項目") {
             details.add({
               "item": itemTitle,
               "percentage": texts.length > 3 ? texts[3] : "",

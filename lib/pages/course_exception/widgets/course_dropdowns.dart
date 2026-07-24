@@ -1,7 +1,7 @@
 // 檔案名稱：widgets/course_dropdowns.dart
 import 'package:flutter/material.dart';
 import '../course_exception_models.dart';
-import '../../../widgets/glass_dropdown.dart';
+import '../../../widgets/glass/glass_dropdown.dart';
 
 /// 加退選下拉選單元件
 class ActionDropdown extends StatelessWidget {

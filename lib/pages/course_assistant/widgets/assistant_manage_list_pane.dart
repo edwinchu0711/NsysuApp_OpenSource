@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../models/course_assistant_models.dart';
 import '../../../models/course_model.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/layout_style_notifier.dart';
+import '../../../widgets/glass/glass_card.dart';
 import '../course_assistant_constants.dart';
 import '../course_assistant_utils.dart';
 
@@ -24,11 +26,20 @@ class ManageListPaneInline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
+        color: isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
         border: Border(
-          right: BorderSide(color: colorScheme.borderColor, width: 0.5),
+          right: BorderSide(
+            color: isLiquidGlass
+                ? (colorScheme.isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.35))
+                : colorScheme.borderColor,
+            width: 0.5,
+          ),
         ),
       ),
       child: Column(
@@ -58,7 +69,7 @@ class ManageListPaneInline extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: colorScheme.primary.withOpacity(0.1),
+                    color: colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -73,7 +84,14 @@ class ManageListPaneInline extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, color: colorScheme.borderColor),
+          Divider(
+            height: 1,
+            color: isLiquidGlass
+                ? (colorScheme.isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.35))
+                : colorScheme.borderColor,
+          ),
           Expanded(
             child: (courses.isEmpty && events.isEmpty)
                 ? Center(
@@ -83,9 +101,11 @@ class ManageListPaneInline extends StatelessWidget {
                     ),
                   )
                 : ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 8,
+                      bottom: isLiquidGlass ? 100 : 8,
                     ),
                     children: [
                       if (courses.isNotEmpty) ...[
@@ -100,17 +120,18 @@ class ManageListPaneInline extends StatelessWidget {
                           ),
                         ),
                         ...courses.map(
-                          (c) => Card(
+                          (c) => Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            color: colorScheme.subtleBackground,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(
-                                color: colorScheme.borderColor,
-                                width: 0.5,
-                              ),
-                            ),
+                            decoration: isLiquidGlass
+                                ? glassCardDecoration(context, borderRadius: 8)
+                                : BoxDecoration(
+                                    color: colorScheme.subtleBackground,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: colorScheme.borderColor,
+                                      width: 0.5,
+                                    ),
+                                  ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
@@ -156,17 +177,18 @@ class ManageListPaneInline extends StatelessWidget {
                           ),
                         ),
                         ...events.map(
-                          (e) => Card(
+                          (e) => Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            color: colorScheme.subtleBackground,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(
-                                color: colorScheme.borderColor,
-                                width: 0.5,
-                              ),
-                            ),
+                            decoration: isLiquidGlass
+                                ? glassCardDecoration(context, borderRadius: 8)
+                                : BoxDecoration(
+                                    color: colorScheme.subtleBackground,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: colorScheme.borderColor,
+                                      width: 0.5,
+                                    ),
+                                  ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,

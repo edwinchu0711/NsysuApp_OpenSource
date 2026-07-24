@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/course_assistant_models.dart';
-import '../../../widgets/glass_dropdown.dart';
+import '../../../widgets/glass/glass_dropdown.dart';
 
 /// AppBar 上的課表切換下拉選單（原 _buildAppBarDropdown）
 class AppBarScheduleDropdown extends StatelessWidget {

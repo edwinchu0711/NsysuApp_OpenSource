@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import 'glass/glass_dropdown.dart';
 
 class SearchableDropdownField extends StatefulWidget {
   final TextEditingController controller;
@@ -207,137 +209,179 @@ class _SearchableDropdownFieldState extends State<SearchableDropdownField> {
                     // 防止點擊下拉選單內部時關閉
                     onTap: () {},
                     child: Material(
-                      elevation: 8,
+                      color: LayoutStyleNotifier.instance.isLiquidGlass
+                          ? Colors.transparent
+                          : colorScheme.cardBackground,
+                      elevation: LayoutStyleNotifier.instance.isLiquidGlass ? 0 : 8,
                       borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        constraints: const BoxConstraints(maxHeight: 300),
-                        decoration: BoxDecoration(
-                          color: colorScheme.cardBackground,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: colorScheme.borderColor),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 搜尋框區域（如果啟用搜尋功能）
-                            if (widget.enableSearch) ...[
-                              Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: TextField(
-                                  controller: _searchController,
-                                  focusNode: _searchFocusNode,
-                                  decoration: InputDecoration(
-                                    hintText: '搜尋...',
-                                    hintStyle: TextStyle(
-                                      color: colorScheme.subtitleText,
-                                      fontSize: 13,
+                      child: Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final menuContent = Container(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            decoration: LayoutStyleNotifier.instance.isLiquidGlass
+                                ? BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                                        : Colors.white.withValues(alpha: 0.90),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.12)
+                                          : Colors.white.withValues(alpha: 0.4),
+                                      width: 1.0,
                                     ),
-                                    filled: true,
-                                    fillColor:
-                                        colorScheme.secondaryCardBackground,
-                                    prefixIcon: Icon(
-                                      Icons.search,
-                                      size: 18,
-                                      color: colorScheme.subtitleText,
-                                    ),
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: colorScheme.borderColor,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
                                       ),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: colorScheme.borderColor,
-                                      ),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: colorScheme.accentBlue,
-                                        width: 1.5,
-                                      ),
-                                    ),
+                                    ],
+                                  )
+                                : BoxDecoration(
+                                    color: colorScheme.cardBackground,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: colorScheme.borderColor),
                                   ),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: colorScheme.primaryText,
-                                  ),
-                                ),
-                              ),
-                              const Divider(height: 1),
-                            ],
-                            // 建議列表區域
-                            Flexible(
-                              child: _filteredSuggestions.isEmpty
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Text(
-                                        '無符合結果',
-                                        style: TextStyle(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 搜尋框區域（如果啟用搜尋功能）
+                                if (widget.enableSearch) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: TextField(
+                                      controller: _searchController,
+                                      focusNode: _searchFocusNode,
+                                      decoration: InputDecoration(
+                                        hintText: '搜尋...',
+                                        hintStyle: TextStyle(
                                           color: colorScheme.subtitleText,
                                           fontSize: 13,
                                         ),
+                                        fillColor: LayoutStyleNotifier.instance.isLiquidGlass
+                                            ? Colors.white.withValues(alpha: 0.08)
+                                            : colorScheme.secondaryCardBackground,
+                                        prefixIcon: Icon(
+                                          Icons.search,
+                                          size: 18,
+                                          color: colorScheme.subtitleText,
+                                        ),
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(
+                                            color: colorScheme.borderColor,
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(
+                                            color: colorScheme.borderColor,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(
+                                            color: colorScheme.accentBlue,
+                                            width: 1.5,
+                                          ),
+                                        ),
                                       ),
-                                    )
-                                  : ListView.builder(
-                                      shrinkWrap: true,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 4,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: colorScheme.primaryText,
                                       ),
-                                      itemCount: _filteredSuggestions.length,
-                                      itemBuilder: (context, index) {
-                                        final item =
-                                            _filteredSuggestions[index];
-                                        final isSelected =
-                                            item == widget.controller.text;
-
-                                        return InkWell(
-                                          onTap: () {
-                                            _selectItem(item);
-                                          },
-                                          child: Container(
-                                            margin: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 1,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? colorScheme.accentBlue
-                                                        .withValues(alpha: 0.1)
-                                                  : null,
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                            ),
-                                            child: Text(
-                                              item,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: isSelected
-                                                    ? colorScheme.accentBlue
-                                                    : colorScheme.primaryText,
-                                                fontWeight: isSelected
-                                                    ? FontWeight.w400
-                                                    : FontWeight.normal,
-                                              ),
+                                    ),
+                                  ),
+                                  const Divider(height: 1),
+                                ],
+                                // 建議列表區域
+                                Flexible(
+                                  child: _filteredSuggestions.isEmpty
+                                      ? Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Text(
+                                            '無符合結果',
+                                            style: TextStyle(
+                                              color: colorScheme.subtitleText,
+                                              fontSize: 13,
                                             ),
                                           ),
-                                        );
-                                      },
-                                    ),
+                                        )
+                                      : ListView.builder(
+                                          shrinkWrap: true,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 4,
+                                          ),
+                                          itemCount: _filteredSuggestions.length,
+                                          itemBuilder: (context, index) {
+                                            final item =
+                                                _filteredSuggestions[index];
+                                            final isSelected =
+                                                item == widget.controller.text;
+
+                                            if (LayoutStyleNotifier.instance.isLiquidGlass) {
+                                              return HoverableSingleSelectOption(
+                                                label: item,
+                                                isSelected: isSelected,
+                                                colorScheme: colorScheme,
+                                                dense: true,
+                                                onTap: () {
+                                                  _selectItem(item);
+                                                },
+                                              );
+                                            }
+
+                                            return InkWell(
+                                              onTap: () {
+                                                _selectItem(item);
+                                              },
+                                              child: Container(
+                                                margin: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 1,
+                                                ),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 8,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: isSelected
+                                                      ? colorScheme.accentBlue
+                                                            .withValues(alpha: 0.1)
+                                                      : null,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  item,
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: isSelected
+                                                        ? colorScheme.accentBlue
+                                                        : colorScheme.primaryText,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.w400
+                                                        : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+
+                          return menuContent;
+                        },
                       ),
                     ),
                   ),
@@ -353,6 +397,66 @@ class _SearchableDropdownFieldState extends State<SearchableDropdownField> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // liquid glass 模式下，觸發鈕外觀與「學期成績查詢」的 GlassSingleSelectDropdown 一致：
+    // 半透明玻璃容器 + 細白邊框 + 圓角箭頭圖示，不再使用 OutlineInputBorder。
+    if (LayoutStyleNotifier.instance.isLiquidGlass) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final text = widget.controller.text;
+      final isEmpty = text.isEmpty;
+
+      return CompositedTransformTarget(
+        link: _layerLink,
+        child: GestureDetector(
+          onTap: _toggleDropdown,
+          child: AbsorbPointer(
+            child: AnimatedContainer(
+              key: _fieldKey,
+              duration: const Duration(milliseconds: 200),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.35),
+                  width: 1.0,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      isEmpty ? widget.hintText : text,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isEmpty
+                            ? colorScheme.subtitleText
+                            : colorScheme.primaryText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _isOpen
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                    color: colorScheme.subtitleText,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return CompositedTransformTarget(
       link: _layerLink,

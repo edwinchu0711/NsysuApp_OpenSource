@@ -6,8 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/score_item.dart';
 import '../services/course_evaluation_service.dart';
 import '../services/historical_score_service.dart';
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_dropdown.dart';
 import 'score_tracking_detail.dart';
 import 'score_tracking_migration_dialog.dart';
 
@@ -153,48 +157,52 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
 
   /// 清除當前學期所有分數追蹤資料
   Future<void> _resetAllData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("重置分數追蹤"),
-        content: Text("確定要清除 $_selectedYear 學年第 $_selectedSem 學期的所有分數追蹤資料嗎？"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              "確定清除",
-              style: TextStyle(color: Colors.redAccent),
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("重置分數追蹤"),
+          content: Text("確定要清除 $_selectedYear 學年第 $_selectedSem 學期的所有分數追蹤資料嗎？"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("取消"),
             ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final keysToRemove = prefs.getKeys().where((k) {
-      return k.startsWith(
-        'score_tracking_scores_${_selectedYear}_${_selectedSem}_',
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text(
+                "確定清除",
+                style: TextStyle(color: Colors.redAccent),
+              ),
+            ),
+          ],
+        ),
       );
-    }).toList();
 
-    for (var key in keysToRemove) {
-      await prefs.remove(key);
-    }
+      if (confirmed != true) return;
 
-    _courseDataCache.clear();
-    _selectedCourseId = null;
+      final prefs = await SharedPreferences.getInstance();
+      final keysToRemove = prefs.getKeys().where((k) {
+        return k.startsWith(
+          'score_tracking_scores_${_selectedYear}_${_selectedSem}_',
+        );
+      }).toList();
 
-    if (mounted) {
-      setState(() {});
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("已清除當前學期分數追蹤資料")));
+      for (var key in keysToRemove) {
+        await prefs.remove(key);
+      }
+
+      _courseDataCache.clear();
+      _selectedCourseId = null;
+
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("已清除當前學期分數追蹤資料"), duration: const Duration(seconds: 2)));
+      }
+    } catch (e) {
+      if (mounted) await OfflineErrorHandler.show(context, e);
     }
   }
 
@@ -209,8 +217,7 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
             ? 36.0
             : (screenWidth > 600 ? 24.0 : 16.0);
 
-        return Scaffold(
-          backgroundColor: colorScheme.pageBackground,
+        return GlassPageScaffold(
           appBar: AppBar(
             title: const Text("分數試算"),
             actions: [
@@ -332,7 +339,22 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
                                                 border: Border(
                                                   right: BorderSide(
                                                     color:
-                                                        colorScheme.borderColor,
+                                                        LayoutStyleNotifier
+                                                            .instance
+                                                            .isLiquidGlass
+                                                        ? (colorScheme.isDark
+                                                              ? Colors.white
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.1,
+                                                                    )
+                                                              : Colors.white
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.35,
+                                                                    ))
+                                                        : colorScheme
+                                                              .borderColor,
                                                   ),
                                                 ),
                                               ),
@@ -503,13 +525,17 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
     List<String> availableSems,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 10)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.borderColor),
+            ),
       child: Row(
         children: [
           Expanded(
@@ -545,18 +571,30 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
 
   Widget _buildInfoBox() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.isDark
-            ? Colors.blue[900]!.withValues(alpha: 0.2)
-            : Colors.blue[50],
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: colorScheme.accentBlue.withValues(alpha: 0.3),
-        ),
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 10)!.copyWith(
+              color: colorScheme.isDark
+                  ? Colors.blue[900]!.withValues(alpha: 0.12)
+                  : Colors.blue[50]!.withValues(alpha: 0.4),
+              border: Border.all(
+                color: colorScheme.accentBlue.withValues(alpha: 0.3),
+                width: 1.0,
+              ),
+            )
+          : BoxDecoration(
+              color: colorScheme.isDark
+                  ? Colors.blue[900]!.withValues(alpha: 0.2)
+                  : Colors.blue[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: colorScheme.accentBlue.withValues(alpha: 0.3),
+              ),
+            ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -595,22 +633,30 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
     String key = "${_selectedYear!}-${_selectedSem!}";
     final courses =
         HistoricalScoreService.instance.coursesNotifier.value[key] ?? [];
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     if (courses.isEmpty) {
       return Center(
         child: Text(
           "資料載入異常",
-          style: TextStyle(color: Theme.of(context).colorScheme.subtitleText),
+          style: TextStyle(color: colorScheme.subtitleText),
         ),
       );
     }
 
+    final isWide = MediaQuery.of(context).size.width > 600;
+
     return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 40),
+      padding: EdgeInsets.only(bottom: (isLiquidGlass && isWide) ? 100 : 40),
       itemCount: courses.length,
       separatorBuilder: (context, index) => Divider(
         height: 1,
-        color: Theme.of(context).colorScheme.borderColor.withValues(alpha: 0.5),
+        color: isLiquidGlass
+            ? (colorScheme.isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.35))
+            : colorScheme.borderColor.withValues(alpha: 0.5),
       ),
       itemBuilder: (context, index) => _buildCourseItem(courses[index]),
     );
@@ -619,12 +665,15 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
   Widget _buildCourseItem(CourseScore course) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedCourseId == course.id;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     return InkWell(
       onTap: () => _selectCourse(course),
       child: Container(
         color: isSelected
-            ? colorScheme.accentBlue.withValues(alpha: 0.1)
+            ? colorScheme.accentBlue.withValues(
+                alpha: isLiquidGlass ? 0.15 : 0.1,
+              )
             : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         child: Row(
@@ -633,9 +682,13 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: colorScheme.isDark
-                    ? Colors.blue[900]!.withValues(alpha: 0.3)
-                    : Colors.blue[50],
+                color: isLiquidGlass
+                    ? (colorScheme.isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.white.withValues(alpha: 0.4))
+                    : (colorScheme.isDark
+                          ? Colors.blue[900]!.withValues(alpha: 0.3)
+                          : Colors.blue[50]),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -780,6 +833,9 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
 
     return SingleChildScrollView(
       key: ValueKey('detail_${courseData.courseId}'),
+      padding: EdgeInsets.only(
+        bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+      ),
       child: ScoreTrackingDetail(
         courseData: courseData,
         onSave: (updatedData) {
@@ -789,9 +845,13 @@ class _ScoreTrackingPageState extends State<ScoreTrackingPage> {
           _saveCourseData(_selectedCourseId!, updatedData);
         },
         onRefresh: () async {
-          final latestData = _courseDataCache[_selectedCourseId!];
-          if (latestData != null) {
-            await _refreshEvaluation(_selectedCourseId!, latestData);
+          try {
+            final latestData = _courseDataCache[_selectedCourseId!];
+            if (latestData != null) {
+              await _refreshEvaluation(_selectedCourseId!, latestData);
+            }
+          } catch (e) {
+            if (mounted) await OfflineErrorHandler.show(context, e);
           }
         },
       ),

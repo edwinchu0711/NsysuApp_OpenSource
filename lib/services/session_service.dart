@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/utils.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class SessionTimeoutException implements Exception {
   final String message;
@@ -18,14 +19,13 @@ class SessionService {
   SessionService._internal();
 
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   String? _cachedCookie;
   DateTime? _cookieTime;
   Future<String?>? _loginFuture;
 
   // 15分鐘的過期限制
-  static const Duration _sessionDuration = Duration(minutes: 15);
 
   /// 獲取有效的 Session Cookie。
   /// 已停用快取機制，每次調用皆強制執行登入流程以取得全新 Cookie。

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../services/bus_service.dart';
 import '../../models/bus_info.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../services/offline_error_handler.dart';
 import 'bus_time_page.dart';
 
 enum _BusListState { loading, success, error }
@@ -27,6 +30,13 @@ class _BusListPageState extends State<BusListPage> {
   }
 
   Future<void> _fetchData() async {
+    if (OfflineErrorHandler.isOffline) {
+      if (mounted) {
+        setState(() => _state = _BusListState.error);
+        await OfflineErrorHandler.show(context, const OfflineDisabledException());
+      }
+      return;
+    }
     try {
       final list = await BusService.instance.fetchBusInfoList(
         Localizations.localeOf(context),
@@ -50,7 +60,7 @@ class _BusListPageState extends State<BusListPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text('校園公車'),
       ),
@@ -63,7 +73,13 @@ class _BusListPageState extends State<BusListPage> {
 
     switch (_state) {
       case _BusListState.loading:
-        return const Center(child: CircularProgressIndicator());
+        return Center(
+          child: CircularProgressIndicator(
+            color: LayoutStyleNotifier.instance.isLiquidGlass
+                ? colorScheme.primary
+                : null,
+          ),
+        );
       case _BusListState.error:
         return InkWell(
           onTap: _fetchData,
@@ -103,7 +119,12 @@ class _BusListPageState extends State<BusListPage> {
         }
 
         final listWidget = ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 8,
+          ),
           itemCount: _busList.length,
           itemBuilder: (context, index) {
             final bus = _busList[index];
@@ -175,16 +196,28 @@ class _BusRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasCar = busInfo.carId != null;
+    final bool hasCar = busInfo.isOperating;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: isSelected
             ? colorScheme.primary.withValues(alpha: 0.05)
-            : colorScheme.cardBackground,
+            : (isLiquidGlass
+                ? (isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.white.withValues(alpha: 0.45))
+                : colorScheme.cardBackground),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSelected ? colorScheme.primary : colorScheme.borderColor,
+          color: isSelected
+              ? colorScheme.primary
+              : (isLiquidGlass
+                  ? (isDark
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.black.withValues(alpha: 0.05))
+                  : colorScheme.borderColor),
           width: isSelected ? 2 : 1,
         ),
         boxShadow: [
@@ -247,24 +280,19 @@ class _BusRouteCard extends StatelessWidget {
                   children: [
                     Text(
                       hasCar
-                          ? busInfo.carId!.split(',').first
-                          : busInfo.stopName,
+                          ? busInfo.busIds.first
+                          : (Localizations.localeOf(context)
+                                      .languageCode
+                                      .contains('en')
+                                  ? 'Out of service'
+                                  : '未行駛'),
                       style: TextStyle(
                         fontSize: 13,
                         color: hasCar ? Colors.green : Colors.red,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (busInfo.updateTime != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        busInfo.updateTime!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colorScheme.subtitleText,
-                        ),
-                      ),
-                    ],
+                    // Removed updateTime display as requested
                   ],
                 ),
                 const SizedBox(width: 8),

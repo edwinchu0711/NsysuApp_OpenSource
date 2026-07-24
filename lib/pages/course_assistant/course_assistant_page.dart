@@ -5,11 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/course_assistant_models.dart';
 import '../../models/course_model.dart';
 import '../../services/course_query_service.dart';
+import '../../services/offline_error_handler.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_popup_menu.dart';
 import 'assistant_add_course_page.dart';
 import 'assistant_export_page.dart';
 import 'assistant_import_page.dart';
 import 'course_assistant_utils.dart';
 import 'dialogs/add_custom_event_dialog.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_dialog.dart';
 import 'dialogs/course_detail_dialog.dart';
 import 'dialogs/custom_event_detail_dialog.dart';
 import 'dialogs/info_dialog.dart';
@@ -116,7 +121,11 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
         _customEvents = [];
       }
     } catch (e) {
-      debugPrint("讀取資料失敗: $e");
+      if (e is OfflineDisabledException) {
+        if (mounted) await OfflineErrorHandler.show(context, e);
+      } else {
+        debugPrint("讀取資料失敗: $e");
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -364,12 +373,141 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
 
   void _showInfoDialog() => showInfoDialog(context);
 
+  /// AppBar 右上角「...」選單。liquid glass 模式使用 [GlassPopupMenu]（玻璃選單），
+  /// 其他模式維持原本的 [PopupMenuButton] 樣式不變。
+  Widget _buildAppBarOverflowMenu({required bool full, required bool narrow}) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final EdgeInsets padding = narrow
+        ? const EdgeInsets.symmetric(horizontal: 4)
+        : const EdgeInsets.all(8.0);
+    final BoxConstraints constraints = narrow
+        ? const BoxConstraints(minWidth: 32, minHeight: 32)
+        : const BoxConstraints();
+
+    if (!isLiquidGlass) {
+      return PopupMenuButton<String>(
+        padding: padding,
+        constraints: narrow ? constraints : null,
+        onSelected: _handleMenuSelection,
+        itemBuilder: (BuildContext context) => full
+            ? [
+                const PopupMenuItem(
+                  value: 'add',
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_box, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text("新增課程"),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'add_event',
+                  child: Row(
+                    children: [
+                      Icon(Icons.event_note, color: Colors.blueGrey),
+                      SizedBox(width: 8),
+                      Text("新增其他行程"),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'import',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download),
+                      SizedBox(width: 8),
+                      Text("匯入課表"),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'export',
+                  child: Row(
+                    children: [
+                      Icon(Icons.upload),
+                      SizedBox(width: 8),
+                      Text("匯出至選課"),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_forever, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text("清除全部資料", style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ]
+            : [
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_forever, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text("清除全部資料", style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
+      );
+    }
+
+    final items = <GlassPopupMenuItem<String>>[
+      GlassPopupMenuItem(
+        value: 'add',
+        label: "新增課程",
+        icon: Icons.add_box,
+        iconColor: Colors.blue,
+      ),
+      GlassPopupMenuItem(
+        value: 'add_event',
+        label: "新增其他行程",
+        icon: Icons.event_note,
+        iconColor: Colors.blueGrey,
+      ),
+      GlassPopupMenuItem(
+        value: 'import',
+        label: "匯入課表",
+        icon: Icons.download,
+      ),
+      GlassPopupMenuItem(
+        value: 'export',
+        label: "匯出至選課",
+        icon: Icons.upload,
+      ),
+      GlassPopupMenuItem(
+        value: 'clear',
+        label: "清除全部資料",
+        icon: Icons.delete_forever,
+        isDestructive: true,
+        dividerBefore: true,
+      ),
+    ];
+
+    return GlassPopupMenu<String>(
+      onSelected: _handleMenuSelection,
+      items: full ? items : [items.last],
+      child: Container(
+        padding: padding,
+        constraints: narrow ? constraints : null,
+        child: const Icon(Icons.more_vert),
+      ),
+    );
+  }
+
   void _handleMenuSelection(String value) {
     switch (value) {
       case 'add':
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'assistant_add_course'),
             builder: (context) => const AssistantAddCoursePage(),
           ),
         ).then((_) => _loadAllData());
@@ -380,13 +518,17 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
       case 'import':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const AssistantImportPage()),
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'assistant_import'),
+            builder: (context) => const AssistantImportPage(),
+          ),
         ).then((_) => _loadAllData());
         break;
       case 'export':
         Navigator.push(
           context,
           MaterialPageRoute(
+            settings: const RouteSettings(name: 'assistant_export'),
             builder: (context) => AssistantExportPage(
               courses: List<Course>.from(_assistantCourses),
             ),
@@ -394,26 +536,24 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
         );
         break;
       case 'clear':
-        showDialog(
+        showGlassDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("確認清除"),
-            content: const Text("確定要清空選課助手裡的所有課程與自訂行程嗎？(不影響正式課表)"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("取消"),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _clearAllData();
-                },
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text("確定清除"),
-              ),
-            ],
-          ),
+          title: const Text("確認清除"),
+          content: const Text("確定要清空選課助手裡的所有課程與自訂行程嗎？(不影響正式課表)"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: const Text("取消"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                _clearAllData();
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text("確定清除"),
+            ),
+          ],
         );
         break;
     }
@@ -484,8 +624,9 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_isLoading) {
-      return Scaffold(
+      return GlassPageScaffold(
         appBar: AppBar(
           title: const Text(
             "選課助手",
@@ -502,7 +643,7 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
 
         if (width < 800) {
           // Mobile layout
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Row(
                 children: [
@@ -542,73 +683,15 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
                   onPressed: _showInfoDialog,
                 ),
                 const SizedBox(width: 4),
-                PopupMenuButton<String>(
-                  padding: width < 450
-                      ? const EdgeInsets.symmetric(horizontal: 4)
-                      : const EdgeInsets.all(8.0),
-                  constraints: width < 450
-                      ? const BoxConstraints(minWidth: 32, minHeight: 32)
-                      : null,
-                  onSelected: _handleMenuSelection,
-                  itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem(
-                      value: 'add',
-                      child: Row(
-                        children: [
-                          Icon(Icons.add_box, color: Colors.blue),
-                          SizedBox(width: 8),
-                          Text("新增課程"),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'add_event',
-                      child: Row(
-                        children: [
-                          Icon(Icons.event_note, color: Colors.blueGrey),
-                          SizedBox(width: 8),
-                          Text("新增其他行程"),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'import',
-                      child: Row(
-                        children: [
-                          Icon(Icons.download),
-                          SizedBox(width: 8),
-                          Text("匯入課表"),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'export',
-                      child: Row(
-                        children: [
-                          Icon(Icons.upload),
-                          SizedBox(width: 8),
-                          Text("匯出至選課"),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'clear',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_forever, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text("清除全部資料", style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                _buildAppBarOverflowMenu(full: true, narrow: width < 450),
               ],
             ),
             body: (_assistantCourses.isEmpty && _customEvents.isEmpty)
                 ? const AssistantEmptyState()
                 : SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: isLiquidGlass ? 100 : 0,
+                    ),
                     child: Column(
                       children: [
                         CreditsBar(
@@ -630,7 +713,7 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
           );
         } else if (width < 1200) {
           // Medium layout
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Row(
                 children: [
@@ -664,21 +747,7 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
                   onPressed: _showInfoDialog,
                 ),
                 const SizedBox(width: 8),
-                PopupMenuButton<String>(
-                  onSelected: _handleMenuSelection,
-                  itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem(
-                      value: 'clear',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_forever, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text("清除全部資料", style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                _buildAppBarOverflowMenu(full: false, narrow: false),
               ],
             ),
             body: Row(
@@ -696,6 +765,9 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
                       ),
                       Expanded(
                         child: SingleChildScrollView(
+                          padding: EdgeInsets.only(
+                            bottom: isLiquidGlass ? 100 : 0,
+                          ),
                           child: AssistantTimetable(
                             courses: _assistantCourses,
                             events: _customEvents,
@@ -720,7 +792,7 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
           );
         } else {
           // Wide layout
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Row(
                 children: [
@@ -754,21 +826,7 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
                   onPressed: _showInfoDialog,
                 ),
                 const SizedBox(width: 8),
-                PopupMenuButton<String>(
-                  onSelected: _handleMenuSelection,
-                  itemBuilder: (BuildContext context) => [
-                    const PopupMenuItem(
-                      value: 'clear',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_forever, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text("清除全部資料", style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                _buildAppBarOverflowMenu(full: false, narrow: false),
               ],
             ),
             body: Row(
@@ -789,6 +847,9 @@ class _CourseAssistantPageState extends State<CourseAssistantPage> {
                     children: [
                       Expanded(
                         child: SingleChildScrollView(
+                          padding: EdgeInsets.only(
+                            bottom: isLiquidGlass ? 100 : 0,
+                          ),
                           child: AssistantTimetable(
                             courses: _assistantCourses,
                             events: _customEvents,

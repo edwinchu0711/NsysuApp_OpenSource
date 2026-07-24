@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../utils/utils.dart';
 import 'storage_service.dart';
 import 'historical_score_service.dart';
+import 'http_client_factory.dart';
 
 class CourseSelectionRawData {
   final String dept;
@@ -61,7 +62,7 @@ class AiPersonalizationService {
   static const String DATA_KEY = 'ai_course_history_data';
 
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   final ValueNotifier<List<CourseHistoryResult>> resultsNotifier =
       ValueNotifier([]);
@@ -73,8 +74,9 @@ class AiPersonalizationService {
       String? jsonStr = await StorageService.instance.read(DATA_KEY);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         List<dynamic> decoded = jsonDecode(jsonStr);
-        resultsNotifier.value =
-            decoded.map((e) => CourseHistoryResult.fromJson(e)).toList();
+        resultsNotifier.value = decoded
+            .map((e) => CourseHistoryResult.fromJson(e))
+            .toList();
       }
     } catch (e) {
       debugPrint("AiPersonalizationService: 讀取快取失敗: $e");
@@ -84,19 +86,25 @@ class AiPersonalizationService {
   Future<bool> checkIfSyncNeeded() async {
     try {
       // 1. 檢查是否在 1 小時內已經同步過
-      final String? lastSyncStr = await StorageService.instance.read('ai_course_history_last_sync_time');
+      final String? lastSyncStr = await StorageService.instance.read(
+        'ai_course_history_last_sync_time',
+      );
       if (lastSyncStr != null) {
         final int? lastSyncMs = int.tryParse(lastSyncStr);
         if (lastSyncMs != null) {
-          final DateTime lastSync = DateTime.fromMillisecondsSinceEpoch(lastSyncMs);
+          final DateTime lastSync = DateTime.fromMillisecondsSinceEpoch(
+            lastSyncMs,
+          );
           if (DateTime.now().difference(lastSync).inHours < 1) {
-            print("DEBUG: AiPersonalizationService: 距離上次同步小於 1 小時，跳過自動抓取。");
+            // debugPrint("DEBUG: AiPersonalizationService: 距離上次同步小於 1 小時，跳過自動抓取。");
             return false;
           }
         }
       }
 
-      String? histJson = await StorageService.instance.read(HistoricalScoreService.CACHE_KEY);
+      String? histJson = await StorageService.instance.read(
+        HistoricalScoreService.CACHE_KEY,
+      );
       if (histJson == null || histJson.isEmpty) {
         return false;
       }
@@ -114,7 +122,9 @@ class AiPersonalizationService {
         }
       }
 
-      Set<String> currentCourses = resultsNotifier.value.map((r) => "${r.semester}_${r.courseNo}").toSet();
+      Set<String> currentCourses = resultsNotifier.value
+          .map((r) => "${r.semester}_${r.courseNo}")
+          .toSet();
 
       for (var courseKey in histCourses) {
         if (!currentCourses.contains(courseKey)) {
@@ -133,8 +143,9 @@ class AiPersonalizationService {
 
   Future<void> _saveToCache() async {
     try {
-      String encoded =
-          jsonEncode(resultsNotifier.value.map((e) => e.toJson()).toList());
+      String encoded = jsonEncode(
+        resultsNotifier.value.map((e) => e.toJson()).toList(),
+      );
       await StorageService.instance.save(DATA_KEY, encoded);
     } catch (e) {
       debugPrint("AiPersonalizationService: 儲存快取失敗: $e");
@@ -143,28 +154,30 @@ class AiPersonalizationService {
 
   Future<void> fetchCourseHistory() async {
     if (isLoadingNotifier.value) {
-      print("DEBUG: AiPersonalizationService: 已經在載入中，忽略此次 fetchCourseHistory()");
+      // debugPrint("DEBUG: AiPersonalizationService: 已經在載入中，忽略此次 fetchCourseHistory()");
       return;
     }
     isLoadingNotifier.value = true;
     statusMessageNotifier.value = "正在載入歷年成績資料...";
-    print("DEBUG: AiPersonalizationService: 開始執行 fetchCourseHistory()");
+    // debugPrint("DEBUG: AiPersonalizationService: 開始執行 fetchCourseHistory()");
 
     try {
-      print("DEBUG: AiPersonalizationService: 正在嘗試讀取歷年成績快取...");
-      String? jsonStr =
-          await StorageService.instance.read(HistoricalScoreService.CACHE_KEY);
-      print("DEBUG: AiPersonalizationService: 歷年成績快取讀取結果: ${jsonStr != null ? '有快取資料' : '無快取資料'}");
+      // debugPrint("DEBUG: AiPersonalizationService: 正在嘗試讀取歷年成績快取...");
+      String? jsonStr = await StorageService.instance.read(
+        HistoricalScoreService.CACHE_KEY,
+      );
+      // debugPrint("DEBUG: AiPersonalizationService: 歷年成績快取讀取結果: ${jsonStr != null ? '有快取資料' : '無快取資料'}");
       if (jsonStr == null || jsonStr.isEmpty) {
-        print("DEBUG: AiPersonalizationService: 無快取，開始觸發 HistoricalScoreService.instance.fetchAllData()...");
+        // debugPrint("DEBUG: AiPersonalizationService: 無快取，開始觸發 HistoricalScoreService.instance.fetchAllData()...");
         await HistoricalScoreService.instance.fetchAllData();
-        print("DEBUG: AiPersonalizationService: HistoricalScoreService 同步歷年成績已完成，重新讀取快取...");
-        jsonStr =
-            await StorageService.instance.read(HistoricalScoreService.CACHE_KEY);
-        print("DEBUG: AiPersonalizationService: 再次讀取快取結果: ${jsonStr != null ? '有快取資料' : '無快取資料'}");
+        // debugPrint("DEBUG: AiPersonalizationService: HistoricalScoreService 同步歷年成績已完成，重新讀取快取...");
+        jsonStr = await StorageService.instance.read(
+          HistoricalScoreService.CACHE_KEY,
+        );
+        // debugPrint("DEBUG: AiPersonalizationService: 再次讀取快取結果: ${jsonStr != null ? '有快取資料' : '無快取資料'}");
         if (jsonStr == null || jsonStr.isEmpty) {
           statusMessageNotifier.value = "找不到歷年成績資料，請先同步成績";
-          print("DEBUG: AiPersonalizationService: 仍無歷年成績資料，返回中斷");
+          // debugPrint("DEBUG: AiPersonalizationService: 仍無歷年成績資料，返回中斷");
           return;
         }
       }
@@ -173,7 +186,8 @@ class AiPersonalizationService {
 
       // 建立已知的科目-開課系所快取對照表 (Key: "semester_courseNo", Value: department)
       Map<String, String> knownDepts = {
-        for (var r in resultsNotifier.value) "${r.semester}_${r.courseNo}": r.department
+        for (var r in resultsNotifier.value)
+          "${r.semester}_${r.courseNo}": r.department,
       };
 
       // 檢查哪些學期有「尚未解析出開課科系」的課程，只針對 these semesters to crawl course selection system
@@ -197,7 +211,7 @@ class AiPersonalizationService {
 
       // 若所有課程均已在快取中擁有開課科系對照，免去網路登入選課系統，直接極速解析
       if (semestersNeedingNetwork.isEmpty) {
-        print("DEBUG: AiPersonalizationService: 所有科系對應皆可由快取解析，免去選課系統網路查詢！");
+        // debugPrint("DEBUG: AiPersonalizationService: 所有科系對應皆可由快取解析，免去選課系統網路查詢！");
         for (var originalKey in decoded.keys) {
           var semesterData = decoded[originalKey];
           if (semesterData is Map && semesterData['courses'] is List) {
@@ -207,15 +221,17 @@ class AiPersonalizationService {
                 String dept = knownDepts["${originalKey}_$courseNo"] ?? '';
                 String score = courseJson['score'] ?? '';
                 String credits = courseJson['credits'] ?? '';
-                allResults.add(CourseHistoryResult(
-                  semester: originalKey,
-                  department: dept,
-                  courseNo: courseNo,
-                  courseName: courseJson['name'] ?? '',
-                  credits: credits,
-                  score: score,
-                  passed: _isPassed(score),
-                ));
+                allResults.add(
+                  CourseHistoryResult(
+                    semester: originalKey,
+                    department: dept,
+                    courseNo: courseNo,
+                    courseName: courseJson['name'] ?? '',
+                    credits: credits,
+                    score: score,
+                    passed: _isPassed(score),
+                  ),
+                );
               }
             }
           }
@@ -227,26 +243,26 @@ class AiPersonalizationService {
         return;
       }
 
-      print("DEBUG: AiPersonalizationService: 偵測到需要網路查詢的學期: $semestersNeedingNetwork");
+      // debugPrint("DEBUG: AiPersonalizationService: 偵測到需要網路查詢的學期: $semestersNeedingNetwork");
 
       final credentials = await StorageService.instance.getCredentials();
       String studentId = (credentials['username'] ?? '').trim();
       String password = (credentials['password'] ?? '').trim();
       if (studentId.isEmpty || password.isEmpty) {
         statusMessageNotifier.value = "找不到帳號密碼";
-        print("DEBUG: AiPersonalizationService: 找不到帳號密碼，無法登入選課系統，返回中斷");
+        // debugPrint("DEBUG: AiPersonalizationService: 找不到帳號密碼，無法登入選課系統，返回中斷");
         return;
       }
 
       statusMessageNotifier.value = "正在登入...";
-      print("DEBUG: AiPersonalizationService: 準備登入選課系統，Stuid: $studentId");
+      // debugPrint("DEBUG: AiPersonalizationService: 準備登入選課系統，Stuid: $studentId");
       String? cookie = await _loginViaSSO2(studentId, password);
       if (cookie == null) {
         statusMessageNotifier.value = "登入失敗，請檢查帳號密碼";
-        print("DEBUG: AiPersonalizationService: 登入選課系統失敗，返回中斷");
+        // debugPrint("DEBUG: AiPersonalizationService: 登入選課系統失敗，返回中斷");
         return;
       }
-      print("DEBUG: AiPersonalizationService: 登入選課系統成功，Cookie 取得");
+      // debugPrint("DEBUG: AiPersonalizationService: 登入選課系統成功，Cookie 取得");
 
       String userAgent =
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
@@ -257,13 +273,20 @@ class AiPersonalizationService {
       for (int i = 0; i < semestersNeedingNetwork.length; i++) {
         String originalKey = semestersNeedingNetwork[i];
         String yrsm = originalKey.replaceAll('-', '');
-        statusMessageNotifier.value = "正在查詢 $originalKey 選課資料 (${i + 1}/$total)...";
-        print("DEBUG: AiPersonalizationService: [${i + 1}/$total] 正在查詢學期 $originalKey ($yrsm) 選課資料...");
+        statusMessageNotifier.value =
+            "正在查詢 $originalKey 選課資料 (${i + 1}/$total)...";
+        // debugPrint("DEBUG: AiPersonalizationService: [${i + 1}/$total] 正在查詢學期 $originalKey ($yrsm) 選課資料...");
 
         List<CourseSelectionRawData> selectedCourses =
-            await _fetchSelectionData(cookie, userAgent, studentId, stuact, yrsm);
+            await _fetchSelectionData(
+              cookie,
+              userAgent,
+              studentId,
+              stuact,
+              yrsm,
+            );
         fetchedSemestersData[originalKey] = selectedCourses;
-        print("DEBUG: AiPersonalizationService: [${i + 1}/$total] 學期 $originalKey 查詢完成，選上課程數: ${selectedCourses.length}");
+        // debugPrint("DEBUG: AiPersonalizationService: [${i + 1}/$total] 學期 $originalKey 查詢完成，選上課程數: ${selectedCourses.length}");
 
         await Future.delayed(const Duration(milliseconds: 150));
       }
@@ -273,7 +296,7 @@ class AiPersonalizationService {
         var semesterData = decoded[originalKey];
         if (semesterData is Map && semesterData['courses'] is List) {
           List<dynamic> historicalCourses = semesterData['courses'];
-          
+
           if (fetchedSemestersData.containsKey(originalKey)) {
             var selectedCourses = fetchedSemestersData[originalKey]!;
             for (var rawData in selectedCourses) {
@@ -281,15 +304,17 @@ class AiPersonalizationService {
                 if (courseJson is Map && courseJson['id'] == rawData.courseNo) {
                   String score = courseJson['score'] ?? '';
                   String credits = courseJson['credits'] ?? '';
-                  allResults.add(CourseHistoryResult(
-                    semester: originalKey,
-                    department: rawData.dept,
-                    courseNo: rawData.courseNo,
-                    courseName: courseJson['name'] ?? '',
-                    credits: credits,
-                    score: score,
-                    passed: _isPassed(score),
-                  ));
+                  allResults.add(
+                    CourseHistoryResult(
+                      semester: originalKey,
+                      department: rawData.dept,
+                      courseNo: rawData.courseNo,
+                      courseName: courseJson['name'] ?? '',
+                      credits: credits,
+                      score: score,
+                      passed: _isPassed(score),
+                    ),
+                  );
                   break;
                 }
               }
@@ -302,15 +327,17 @@ class AiPersonalizationService {
                 String dept = knownDepts["${originalKey}_$courseNo"] ?? '';
                 String score = courseJson['score'] ?? '';
                 String credits = courseJson['credits'] ?? '';
-                allResults.add(CourseHistoryResult(
-                  semester: originalKey,
-                  department: dept,
-                  courseNo: courseNo,
-                  courseName: courseJson['name'] ?? '',
-                  credits: credits,
-                  score: score,
-                  passed: _isPassed(score),
-                ));
+                allResults.add(
+                  CourseHistoryResult(
+                    semester: originalKey,
+                    department: dept,
+                    courseNo: courseNo,
+                    courseName: courseJson['name'] ?? '',
+                    credits: credits,
+                    score: score,
+                    passed: _isPassed(score),
+                  ),
+                );
               }
             }
           }
@@ -319,22 +346,22 @@ class AiPersonalizationService {
 
       resultsNotifier.value = allResults;
       statusMessageNotifier.value = "同步完成，共 ${allResults.length} 筆課程";
-      print("DEBUG: AiPersonalizationService: 同步全部完成，共 ${allResults.length} 筆課程，開始存入快取...");
+      // debugPrint("DEBUG: AiPersonalizationService: 同步全部完成，共 ${allResults.length} 筆課程，開始存入快取...");
       await _saveToCache();
-      
+
       // 儲存成功同步的時間戳記
       await StorageService.instance.save(
         'ai_course_history_last_sync_time',
         DateTime.now().millisecondsSinceEpoch.toString(),
       );
-      print("DEBUG: AiPersonalizationService: 快取與最後同步時間寫入完畢");
+      // debugPrint("DEBUG: AiPersonalizationService: 快取與最後同步時間寫入完畢");
     } catch (e) {
       statusMessageNotifier.value = "同步發生異常";
-      print("DEBUG: AiPersonalizationService: 同步發生異常: $e");
+      // debugPrint("DEBUG: AiPersonalizationService: 同步發生異常: $e");
       debugPrint("AiPersonalizationService Error: $e");
     } finally {
       isLoadingNotifier.value = false;
-      print("DEBUG: AiPersonalizationService: 設置 isLoadingNotifier = false");
+      // debugPrint("DEBUG: AiPersonalizationService: 設置 isLoadingNotifier = false");
     }
   }
 
@@ -342,25 +369,27 @@ class AiPersonalizationService {
     final loginUri = Uri.parse("$_baseUrl/menu4/Studcheck_sso2.asp");
     String encryptedPass = Utils.base64md5(password);
     try {
-      print("DEBUG: AiPersonalizationService: [_loginViaSSO2] 正在對 $loginUri 發送 POST 登入請求...");
-      final response = await _client.post(
-        loginUri,
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-        body: {"stuid": stuid.toUpperCase(), "SPassword": encryptedPass},
-      ).timeout(const Duration(seconds: 10));
-      
-      print("DEBUG: AiPersonalizationService: [_loginViaSSO2] 回應代碼: ${response.statusCode}");
+      // debugPrint("DEBUG: AiPersonalizationService: [_loginViaSSO2] 正在對 $loginUri 發送 POST 登入請求...");
+      final response = await _client
+          .post(
+            loginUri,
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+            body: {"stuid": stuid.toUpperCase(), "SPassword": encryptedPass},
+          )
+          .timeout(const Duration(seconds: 10));
+
+      // debugPrint("DEBUG: AiPersonalizationService: [_loginViaSSO2] 回應代碼: ${response.statusCode}");
       String? rawCookie = response.headers['set-cookie'];
       if (rawCookie != null && !response.body.contains("不符")) {
         return rawCookie;
       }
-      print("DEBUG: AiPersonalizationService: [_loginViaSSO2] 登入失敗或回應內容包含'不符'");
+      // debugPrint("DEBUG: AiPersonalizationService: [_loginViaSSO2] 登入失敗或回應內容包含'不符'");
     } catch (e) {
-      print("DEBUG: AiPersonalizationService: [_loginViaSSO2] 拋出異常: $e");
+      // debugPrint("DEBUG: AiPersonalizationService: [_loginViaSSO2] 拋出異常: $e");
       debugPrint("AiPersonalizationService Login Error: $e");
     }
     return null;
@@ -377,27 +406,32 @@ class AiPersonalizationService {
     String big5Submit = "%BD%54%A9%77%B0%65%A5%58";
     String body = "stuact=$stuact&YRSM=$yrsm&Stuid=$stuid&B1=$big5Submit";
     try {
-      print("DEBUG: AiPersonalizationService: [_fetchSelectionData] 正在向 $uri 查詢 $yrsm 的選課資料...");
+      // debugPrint("DEBUG: AiPersonalizationService: [_fetchSelectionData] 正在向 $uri 查詢 $yrsm 的選課資料...");
       final response = await _client
-          .post(uri,
-              headers: {
-                "Cookie": cookies,
-                "User-Agent": userAgent,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": "$_baseUrl/menu4/query/stu_slt_up.asp",
-              },
-              body: body)
+          .post(
+            uri,
+            headers: {
+              "Cookie": cookies,
+              "User-Agent": userAgent,
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Referer": "$_baseUrl/menu4/query/stu_slt_up.asp",
+            },
+            body: body,
+          )
           .timeout(const Duration(seconds: 15));
-      
-      print("DEBUG: AiPersonalizationService: [_fetchSelectionData] $yrsm 回應代碼: ${response.statusCode}");
+
+      // debugPrint("DEBUG: AiPersonalizationService: [_fetchSelectionData] $yrsm 回應代碼: ${response.statusCode}");
       if (response.statusCode == 200) {
-        String htmlContent = utf8.decode(response.bodyBytes, allowMalformed: true);
+        String htmlContent = utf8.decode(
+          response.bodyBytes,
+          allowMalformed: true,
+        );
         if (htmlContent.contains("科目名稱")) {
           return _parseSelectionHtml(htmlContent);
         }
       }
     } catch (e) {
-      print("DEBUG: AiPersonalizationService: [_fetchSelectionData] $yrsm 拋出異常: $e");
+      // debugPrint("DEBUG: AiPersonalizationService: [_fetchSelectionData] $yrsm 拋出異常: $e");
       debugPrint("AiPersonalizationService Fetch $yrsm Error: $e");
     }
     return [];
@@ -406,8 +440,11 @@ class AiPersonalizationService {
   List<CourseSelectionRawData> _parseSelectionHtml(String html) {
     final rowRegex = RegExp(r'</tr>', caseSensitive: false);
     List<String> sections = html.split(rowRegex);
-    final tdRegex =
-        RegExp(r'<td[^>]*>(.*?)</td>', caseSensitive: false, dotAll: true);
+    final tdRegex = RegExp(
+      r'<td[^>]*>(.*?)</td>',
+      caseSensitive: false,
+      dotAll: true,
+    );
     final tagRegex = RegExp(r'<[^>]+>');
 
     String strip(String s) => s
@@ -427,16 +464,21 @@ class AiPersonalizationService {
       String cell0 = strip(cells[0]);
       if (cell0.contains("選上與否")) continue;
 
-      results.add(CourseSelectionRawData(
-        dept: strip(cells[1]),
-        courseNo: strip(cells[2]),
-      ));
+      results.add(
+        CourseSelectionRawData(
+          dept: strip(cells[1]),
+          courseNo: strip(cells[2]),
+        ),
+      );
     }
     return results;
   }
 
   bool _isPassed(String score) {
     String s = score.toUpperCase();
-    return s.contains('A') || s.contains('B') || s.contains('C') || s.contains('P');
+    return s.contains('A') ||
+        s.contains('B') ||
+        s.contains('C') ||
+        s.contains('P');
   }
 }

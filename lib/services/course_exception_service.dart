@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import '../utils/utils.dart';
+import 'http_client_factory.dart';
 
 class CourseExceptionService {
   static const String _userAgent =
@@ -14,7 +15,7 @@ class CourseExceptionService {
     required String password,
     required Map<String, String> postData,
   }) async {
-    final client = http.Client();
+    final client = createHttpClient();
     final Map<String, String> sessionCookies = {};
 
     try {

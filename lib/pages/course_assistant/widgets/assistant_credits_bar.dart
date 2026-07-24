@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_theme.dart';
+import '../../../theme/layout_style_notifier.dart';
+import '../../../widgets/glass/glass_card.dart';
 
 /// 學分資訊列（原 _buildCreditsBar）
 class CreditsBar extends StatelessWidget {
@@ -20,9 +22,19 @@ class CreditsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      color: colorScheme.isDark ? const Color(0xFF1E2D4A) : Colors.blue[50],
+      margin: isLiquidGlass ? const EdgeInsets.fromLTRB(12, 5, 12, 5) : null,
+      padding: isLiquidGlass
+          ? const EdgeInsets.symmetric(vertical: 4, horizontal: 14)
+          : const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 14)
+          : BoxDecoration(
+              color: colorScheme.isDark
+                  ? const Color(0xFF1E2D4A)
+                  : Colors.blue[50],
+            ),
       width: double.infinity,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -56,12 +68,19 @@ class CreditsBar extends StatelessWidget {
           if (showManageButton)
             TextButton.icon(
               onPressed: onManage,
-              icon: const Icon(Icons.list_alt, size: 18),
+              icon: Icon(Icons.list_alt, size: isLiquidGlass ? 16 : 18),
               label: const Text("管理清單"),
               style: TextButton.styleFrom(
                 foregroundColor: colorScheme.isDark
                     ? const Color(0xFF6B9BF5)
                     : Colors.blue[800],
+                padding: isLiquidGlass
+                    ? const EdgeInsets.symmetric(horizontal: 8, vertical: 0)
+                    : null,
+                visualDensity: isLiquidGlass ? VisualDensity.compact : null,
+                tapTargetSize: isLiquidGlass
+                    ? MaterialTapTargetSize.shrinkWrap
+                    : null,
               ),
             ),
         ],

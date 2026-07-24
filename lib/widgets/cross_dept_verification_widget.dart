@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/program_model.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import 'glass/glass_card.dart';
 
 class CrossDeptVerificationWidget extends StatefulWidget {
   final List<CrossDeptVerification> verifications;
@@ -70,22 +72,30 @@ class _CrossDeptVerificationWidgetState
 
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.isDark
-            ? const Color(0xFF3D2E00)
-            : const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFFCA28)),
-      ),
+      decoration: LayoutStyleNotifier.instance.isLiquidGlass
+          ? BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+            )
+          : BoxDecoration(
+              color: colorScheme.isDark
+                  ? const Color(0xFF3D2E00)
+                  : const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFFCA28)),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.help_outline,
                 size: 18,
-                color: Color(0xFF856404),
+                color: colorScheme.isDark
+                    ? const Color(0xFFFFCA28)
+                    : const Color(0xFF856404),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -133,11 +143,12 @@ class _CrossDeptVerificationWidgetState
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 8) ??
+          BoxDecoration(
+            color: colorScheme.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: colorScheme.borderColor),
+          ),
       child: Column(
         children: [
           InkWell(
@@ -268,7 +279,7 @@ class _CrossDeptVerificationWidgetState
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: fg.withOpacity(0.5)),
+        border: Border.all(color: fg.withValues(alpha: 0.5)),
       ),
       child: Text(
         label,

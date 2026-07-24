@@ -4,6 +4,7 @@ import '../utils/utils.dart'; // 請確認路徑
 import 'storage_service.dart';
 import 'package:flutter/foundation.dart';
 import 'course_query_service.dart';
+import 'http_client_factory.dart';
 
 // --- 資料模型 ---
 class CourseSelectionData {
@@ -70,7 +71,7 @@ class CourseSelectionService {
   CourseSelectionService._privateConstructor();
 
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   /// 主要功能：抓取選課結果
   Future<Map<String, dynamic>> fetchSelectionResult() async {
@@ -238,7 +239,10 @@ class CourseSelectionService {
       }
 
       // 使用新的 selectionBody (slt_result.asp 的內容) 進行解析
-      List<CourseSelectionData> courses = _parseSelectionTable(selectionBody, fallbackSemester: fallbackSem);
+      List<CourseSelectionData> courses = _parseSelectionTable(
+        selectionBody,
+        fallbackSemester: fallbackSem,
+      );
       // debugPrint("✅ [偵錯] 解析完成，共找到 ${courses.length} 門課");
 
       return {'state': SelectionState.open, 'data': courses};
@@ -249,9 +253,12 @@ class CourseSelectionService {
   }
 
   // --- HTML 解析邏輯 (維持容錯模式) ---
-  List<CourseSelectionData> _parseSelectionTable(String html, {String? fallbackSemester}) {
+  List<CourseSelectionData> _parseSelectionTable(
+    String html, {
+    String? fallbackSemester,
+  }) {
     List<CourseSelectionData> results = [];
-    
+
     // 找出網頁上的學期
     final semesterRegex = RegExp(r'(\d{3})\s*(?:學年度第|學年度?第)\s*([12一二])\s*學期');
     final semMatch = semesterRegex.firstMatch(html);
@@ -323,22 +330,6 @@ class CourseSelectionService {
           continue;
         }
       }
-
-      // --- 資料解析 (根據提供的 HTML 結構) ---
-      // index 0: 狀態 (選上/登記加選)
-      // index 1: 系所別 (資管系)
-      // index 2: 課號 (MIS324)
-      // index 3: 年級 (3)
-      // index 4: 課程代碼 (B4023329) -> 對應 code
-      // index 5: 課程名稱 (含 <a>) -> 對應 name
-      // index 6: 點數/志願 (20)
-      // index 7: 階段 (22)
-      // index 8: 學分 (3) -> 對應 credits
-      // index 9: 學年期 (期)
-      // index 10: 必選修 (必) -> 對應 type
-      // index 11: 授課教師 (康藝晃) -> 對應 professor
-      // index 12: 教室 (一A() ...) -> 對應 timeRoom
-      // index 13: 說明 (限資管系...) -> 對應 note
 
       try {
         validRowCount++;

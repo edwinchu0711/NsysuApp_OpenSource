@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class ProgramLinkService {
   static final ProgramLinkService instance = ProgramLinkService._internal();
@@ -31,7 +32,9 @@ class ProgramLinkService {
 
   Future<void> fetchLinks() async {
     try {
-      final response = await http.get(Uri.parse(SOURCE_URL));
+      final client = createHttpClient();
+      final response = await client.get(Uri.parse(SOURCE_URL));
+      client.close();
       if (response.statusCode != 200) return;
 
       final decoded = response.bodyBytes.isNotEmpty

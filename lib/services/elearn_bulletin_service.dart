@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:html/parser.dart' as parser;
-import 'package:html/dom.dart' as dom;
 import 'package:path_provider/path_provider.dart';
+import 'http_client_factory.dart';
 
 // --- 資料模型 ---
 
@@ -161,7 +161,7 @@ class ElearnBulletinService {
   /// 下載檔案
   Future<File> downloadFile(int referenceId, String fileName) async {
     await _ensureAuthenticated();
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final url = "$_baseUrl/api/uploads/reference/$referenceId/blob";
       final response = await client.get(
@@ -171,8 +171,8 @@ class ElearnBulletinService {
 
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
-        // 處理檔名非法字元
-        final safeName = fileName.replaceAll(RegExp(r'[^\w\s\.\-\(\)]'), '_');
+        // 處理檔名非法字元（僅替換不允許的檔名字元，保留中文字元）
+        final safeName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_');
         final file = File('${dir.path}/$safeName');
         await file.writeAsBytes(response.bodyBytes);
         return file;
@@ -234,7 +234,7 @@ class ElearnBulletinService {
 
   // 取得課程 ID -> 名稱 對照表
   Future<Map<int, String>> _getCourseNameMap() async {
-    final client = http.Client();
+    final client = createHttpClient();
     Map<int, String> map = {};
     try {
       var courseRes = await _post(
@@ -271,7 +271,7 @@ class ElearnBulletinService {
     int pageSize,
     Map<int, String> courseMap,
   ) async {
-    final client = http.Client();
+    final client = createHttpClient();
     List<ElearnBulletin> results = [];
     try {
       // 建構參數
@@ -332,7 +332,7 @@ class ElearnBulletinService {
   }
 
   Future<void> _login(String username, String password) async {
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final startUrl = Uri.parse("$_baseUrl/login?next=/user/index");
       final res1 = await client.get(startUrl, headers: _baseHeaders);

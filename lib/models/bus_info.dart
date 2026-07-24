@@ -2,6 +2,7 @@ import 'dart:convert';
 
 class BusInfo {
   final String? carId;
+  final List<String> busIds;
   final String stopName;
   final int routeId;
   final String name;
@@ -12,6 +13,7 @@ class BusInfo {
 
   const BusInfo({
     this.carId,
+    this.busIds = const <String>[],
     required this.stopName,
     required this.routeId,
     required this.name,
@@ -21,8 +23,12 @@ class BusInfo {
     this.updateTime,
   });
 
+  bool get isOperating => busIds.isNotEmpty;
+
   factory BusInfo.fromJson(Map<String, dynamic> json) => BusInfo(
         carId: json['CarID'] as String?,
+        busIds: (json['BusIDs'] as List<dynamic>?)?.cast<String>() ??
+            _busIdsFromCarId(json['CarID'] as String?),
         stopName: json['StopName'] as String,
         routeId: json['RouteID'] as int,
         name: json['Name'] == null
@@ -40,6 +46,7 @@ class BusInfo {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'CarID': carId,
+        'BusIDs': busIds,
         'StopName': stopName,
         'RouteID': routeId,
         'Name': name,
@@ -62,4 +69,12 @@ class BusInfo {
       rawList.map((x) => BusInfo.fromJson(x as Map<String, dynamic>)),
     );
   }
+
+  static List<String> _busIdsFromCarId(String? carId) => carId == null
+      ? const <String>[]
+      : carId
+          .split(',')
+          .map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
 }

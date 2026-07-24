@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 需引入
 import '../../services/exam_task/elearn_task_HW_service.dart';
+import '../../services/offline_error_handler.dart';
 import 'task_detail_pages.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/glass_dropdown.dart';
+import '../../theme/layout_style_notifier.dart';
+import '../../widgets/glass/glass_dropdown.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_card.dart';
 
 class ExamTaskPage extends StatefulWidget {
   const ExamTaskPage({Key? key}) : super(key: key);
@@ -25,7 +29,12 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
   String _selectedCourse = "所有課程";
   List<String> _semesterOptions = [];
   List<String> _courseOptions = ["所有課程"];
-  final Set<String> _selectedStatusFilters = {};
+
+  // 多選狀態篩選
+  final Set<String> _selectedStatusFilters = {}; // '未完成', '已完成', '已過期', '已送出'
+
+  // 時間排序: 'asc' (預設舊到新), 'desc' (新到舊)
+  String _timeSortOrder = "asc";
 
   void _syncSelectedTask() {
     if (_selectedTask != null) {
@@ -43,7 +52,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
   void initState() {
     super.initState();
     _semesterOptions = _generateSemesters();
-    if (_semesterOptions.isNotEmpty) {
+    if (_selectedSemester.isEmpty && _semesterOptions.isNotEmpty) {
       _selectedSemester = _semesterOptions.first;
     }
     // 執行初始化檢查 (讀快取 + 檢查時間)
@@ -63,6 +72,16 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
           // 先別急著關掉 loading，等下決定要不要聯網
         });
       }
+    }
+
+    if (OfflineErrorHandler.isOffline) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _statusMessage = "";
+        });
+      }
+      return;
     }
 
     // 2. 檢查時間決定是否聯網
@@ -162,9 +181,13 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
           _isLoading = false;
           _statusMessage = "更新失敗";
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("更新失敗: $e")));
+        if (e is OfflineDisabledException) {
+          await OfflineErrorHandler.show(context, e);
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("更新失敗: $e"), duration: const Duration(seconds: 2)));
+        }
       }
     }
   }
@@ -286,7 +309,9 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
             top: 4,
             bottom: 8,
           ),
-          color: isDark ? colorScheme.cardBackground : Colors.white,
+          color: LayoutStyleNotifier.instance.isLiquidGlass
+              ? Colors.transparent
+              : (isDark ? colorScheme.cardBackground : Colors.white),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -368,7 +393,11 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const CircularProgressIndicator(),
+                  CircularProgressIndicator(
+                    color: LayoutStyleNotifier.instance.isLiquidGlass
+                        ? colorScheme.primary
+                        : null,
+                  ),
                 ],
               ),
             ),
@@ -377,7 +406,11 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
         if (!_isLoading || _displayedTasks.isNotEmpty)
           Expanded(
             child: Container(
-              color: isDark ? colorScheme.scaffoldBackground : Colors.grey[100],
+              color: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? Colors.transparent
+                  : (isDark
+                        ? colorScheme.scaffoldBackground
+                        : Colors.grey[100]),
               child: _displayedTasks.isEmpty
                   ? Center(
                       child: Text(
@@ -390,7 +423,12 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        12,
+                        12,
+                        LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 12,
+                      ),
                       itemCount: _displayedTasks.length,
                       itemBuilder: (context, index) {
                         return _buildTaskCard(_displayedTasks[index]);
@@ -405,7 +443,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
   Widget _buildDetailPlaceholder(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.isDark;
-    return Scaffold(
+    return GlassPageScaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -414,7 +452,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
               Icons.assignment_outlined,
               size: 64,
               color: isDark
-                  ? colorScheme.subtitleText.withOpacity(0.5)
+                  ? colorScheme.subtitleText.withValues(alpha: 0.5)
                   : Colors.grey[400],
             ),
             const SizedBox(height: 16),
@@ -439,7 +477,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isWideScreen = screenWidth >= 900;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("作業與考試"),
         centerTitle: true,
@@ -460,7 +498,10 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
                 )
               : IconButton(
                   icon: const Icon(Icons.refresh),
-                  onPressed: _fetchFromNetwork, // 手動按按鈕，強制刷新 (忽略3分鐘限制)
+                  onPressed: () async {
+                    if (await OfflineErrorHandler.handleRefresh(context)) return;
+                    _fetchFromNetwork();
+                  }, // 手動按按鈕，強制刷新 (忽略3分鐘限制)
                 ),
         ],
         bottom: isWideScreen
@@ -516,7 +557,25 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     bool isSelected = _selectedStatusFilters.contains(label);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.isDark;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     final primaryColor = isDark ? colorScheme.secondary : Colors.indigo;
+
+    // glass 模式下使用半透明白底 + 細邊框，呼應玻璃質感
+    final Color chipBg = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.5))
+        : (isDark ? colorScheme.secondaryCardBackground : Colors.grey[100]!);
+    final Color chipBorder = isSelected
+        ? primaryColor
+        : (isLiquidGlass
+              ? (isDark
+                    ? Colors.white.withValues(alpha: 0.15)
+                    : Colors.white.withValues(alpha: 0.4))
+              : (isDark ? colorScheme.borderColor : Colors.grey[300]!));
+    final Color chipLabelColor = isSelected
+        ? primaryColor
+        : (isDark ? colorScheme.primaryText : Colors.black87);
 
     return FilterChip(
       label: Center(
@@ -525,9 +584,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
           label,
           style: TextStyle(
             fontSize: 11, // 稍微縮小字體以適應寬度
-            color: isSelected
-                ? primaryColor
-                : (isDark ? colorScheme.primaryText : Colors.black87),
+            color: chipLabelColor,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
@@ -549,25 +606,17 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // 縮小點擊區域至標籤大小
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
 
-      selectedColor: primaryColor.withOpacity(0.2),
+      selectedColor: primaryColor.withValues(alpha: 0.2),
       checkmarkColor: primaryColor,
       labelStyle: TextStyle(
-        color: isSelected
-            ? primaryColor
-            : (isDark ? colorScheme.primaryText : Colors.black87),
+        color: chipLabelColor,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         fontSize: 12, // 再次確保字體較小
       ),
-      backgroundColor: isDark
-          ? colorScheme.secondaryCardBackground
-          : Colors.grey[100],
+      backgroundColor: chipBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected
-              ? primaryColor
-              : (isDark ? colorScheme.borderColor : Colors.grey[300]!),
-        ),
+        side: BorderSide(color: chipBorder),
       ),
     );
   }
@@ -589,6 +638,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
         _selectedTask?.id == task.id &&
         _selectedTask?.type == task.type;
     final primaryColor = isDark ? colorScheme.secondary : Colors.indigo;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     Color statusColor;
     String statusText;
@@ -607,16 +657,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
       statusText = task.statusRaw;
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: isSelected ? 4 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isSelected
-            ? BorderSide(color: primaryColor, width: 2)
-            : BorderSide.none,
-      ),
-      child: InkWell(
+    final Widget cardChild = InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _openDetail(task),
         child: Padding(
@@ -706,9 +747,9 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: statusColor.withOpacity(0.3)),
+                      border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -739,8 +780,31 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
             ],
           ),
         ),
-      ),
-    );
+      );
+
+    return isLiquidGlass
+        ? Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(
+              context,
+              borderRadius: 12,
+              isSelected: isSelected,
+              selectedColor: primaryColor,
+            ),
+            child: cardChild,
+          )
+        : Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            elevation: isSelected ? 4 : 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: isSelected
+                  ? BorderSide(color: primaryColor, width: 2)
+                  : BorderSide.none,
+            ),
+            child: cardChild,
+          );
   }
 
   // 輔助方法：類型小標籤 (測驗/作業)
@@ -751,7 +815,7 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: typeColor.withOpacity(0.1),
+        color: typeColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -772,12 +836,12 @@ class _ExamTaskPageState extends State<ExamTaskPage> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.amber.shade900.withOpacity(0.3)
+            ? Colors.amber.shade900.withValues(alpha: 0.3)
             : Colors.amber.shade50,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color: isDark
-              ? Colors.amber.shade800.withOpacity(0.5)
+              ? Colors.amber.shade800.withValues(alpha: 0.5)
               : Colors.amber.shade200,
         ),
       ),

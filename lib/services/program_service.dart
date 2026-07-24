@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/program_model.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class ProgramService {
   static final ProgramService instance = ProgramService._internal();
   ProgramService._internal();
 
   static const String CACHE_KEY = 'program_rules_v1';
+  static const String UPDATE_TIME_KEY = 'program_rules_last_update_time';
   static const String RULES_URL =
       'https://edwinchu0711.github.io/CourseSelectionDateUpdate/program/rules/rules.json';
 
@@ -17,18 +18,11 @@ class ProgramService {
   final ValueNotifier<String> statusNotifier = ValueNotifier('');
 
   Future<void> loadFromCache() async {
+    // 規則不存硬碟，清除舊版硬碟快取（若有）
     try {
-      final jsonStr = await StorageService.instance.read(CACHE_KEY);
-      if (jsonStr != null && jsonStr.isNotEmpty) {
-        final decoded = jsonDecode(jsonStr) as List<dynamic>;
-        programsNotifier.value = decoded
-            .map((e) =>
-                ProgramRule.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-    } catch (e) {
-      debugPrint('ProgramService: loadFromCache error: $e');
-    }
+      await StorageService.instance.remove(CACHE_KEY);
+      await StorageService.instance.remove(UPDATE_TIME_KEY);
+    } catch (_) {}
   }
 
   Future<void> fetchPrograms() async {
@@ -37,7 +31,9 @@ class ProgramService {
     statusNotifier.value = '正在載入學程資料...';
 
     try {
-      final response = await http.get(Uri.parse(RULES_URL));
+      final client = createHttpClient();
+      final response = await client.get(Uri.parse(RULES_URL));
+      client.close();
       if (response.statusCode != 200) {
         statusNotifier.value = '載入失敗';
         return;
@@ -49,7 +45,6 @@ class ProgramService {
               ProgramRule.fromJson(e as Map<String, dynamic>))
           .toList();
       statusNotifier.value = '載入完成';
-      await _saveToCache(response.body);
     } catch (e) {
       statusNotifier.value = '載入失敗';
       debugPrint('ProgramService Error: $e');
@@ -58,11 +53,7 @@ class ProgramService {
     }
   }
 
-  Future<void> _saveToCache(String rawJson) async {
-    try {
-      await StorageService.instance.save(CACHE_KEY, rawJson);
-    } catch (e) {
-      debugPrint('ProgramService: saveToCache error: $e');
-    }
+  Future<DateTime?> getLastUpdateTime() async {
+    return null;
   }
 }

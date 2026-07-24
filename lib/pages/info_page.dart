@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
 
 class InfoItem {
   final String title;
@@ -118,13 +121,14 @@ class _InfoPageState extends State<InfoPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isWide = MediaQuery.of(context).size.width >= 800;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     if (isWide) {
-      return Scaffold(
-        backgroundColor: colorScheme.pageBackground,
+      return GlassPageScaffold(
         appBar: AppBar(
           title: const Text("使用須知與資訊"),
-          backgroundColor: colorScheme.cardBackground,
+          backgroundColor:
+              isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
           elevation: 0,
           iconTheme: IconThemeData(color: colorScheme.primaryText),
           titleTextStyle: TextStyle(
@@ -135,7 +139,12 @@ class _InfoPageState extends State<InfoPage> {
           ),
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+          padding: EdgeInsets.fromLTRB(
+            40,
+            24,
+            40,
+            LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 24,
+          ),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
@@ -186,11 +195,11 @@ class _InfoPageState extends State<InfoPage> {
     }
 
     // Mobile layout
-    return Scaffold(
-      backgroundColor: colorScheme.pageBackground,
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("使用須知與資訊"),
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor:
+            isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
         elevation: 0,
         iconTheme: IconThemeData(color: colorScheme.primaryText),
         titleTextStyle: TextStyle(
@@ -201,7 +210,12 @@ class _InfoPageState extends State<InfoPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 20,
+        ),
         child: Column(
           children: [
             _buildWelcomeCard(),
@@ -238,6 +252,34 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   Widget _buildWelcomeCard() {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    if (isLiquidGlass) {
+      final colorScheme = Theme.of(context).colorScheme;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: glassCardDecoration(context, borderRadius: 15),
+        child: Column(
+          children: [
+            Icon(Icons.auto_awesome, color: colorScheme.accentBlue, size: 40),
+            const SizedBox(height: 10),
+            Text(
+              "歡迎使用學生服務系統",
+              style: TextStyle(
+                color: colorScheme.primaryText,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              "為了確保最佳使用體驗，請詳閱以下說明",
+              style: TextStyle(color: colorScheme.subtitleText, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -271,12 +313,30 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _buildCategorySection(InfoCategory category) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: category.color.withOpacity(0.15), width: 1.5),
-      ),
+      decoration: isLiquidGlass
+          ? BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: category.color.withValues(
+                  alpha: isDark ? 0.25 : 0.3,
+                ),
+                width: 1.5,
+              ),
+            )
+          : BoxDecoration(
+              color: colorScheme.cardBackground.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: category.color.withValues(alpha: 0.15),
+                width: 1.5,
+              ),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -284,7 +344,7 @@ class _InfoPageState extends State<InfoPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: category.color.withOpacity(0.08),
+              color: category.color.withValues(alpha: 0.08),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(18),
                 topRight: Radius.circular(18),
@@ -320,20 +380,23 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _buildInfoItem(InfoItem item, Color themeColor) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.borderColor.withOpacity(0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 12)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.borderColor.withValues(alpha: 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -342,7 +405,7 @@ class _InfoPageState extends State<InfoPage> {
             child: Icon(
               Icons.lens,
               size: 8,
-              color: themeColor.withOpacity(0.7),
+              color: themeColor.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(width: 12),

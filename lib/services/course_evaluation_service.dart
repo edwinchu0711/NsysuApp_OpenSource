@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'http_client_factory.dart';
 
 /// 課程配分方式服務
 /// 從選課系統大網抓取課程評分方式，支援任意學年學期查詢
@@ -33,7 +34,8 @@ class CourseEvaluationService {
     );
 
     try {
-      final response = await http.get(
+      final client = createHttpClient();
+      final response = await client.get(
         url,
         headers: {
           'User-Agent':
@@ -42,6 +44,7 @@ class CourseEvaluationService {
             'Cookie': sessionCookie,
         },
       );
+      client.close();
 
       if (response.statusCode == 200) {
         String html = utf8.decode(response.bodyBytes, allowMalformed: true);

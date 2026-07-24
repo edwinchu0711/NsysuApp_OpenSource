@@ -8,8 +8,14 @@ import '../models/program_model.dart';
 /// it from total required credits, then divides by total required.
 double computeEffectiveCompletionRate(EligibilityResult result) {
   if (result.totalCreditsRequired == 0) return 0.0;
-  final totalDeficit =
-      (result.totalCreditsRequired - result.totalCreditsEarned).clamp(0, 999999);
+  
+  int groupDeficitsSum = 0;
+  for (final g in result.groups) {
+    groupDeficitsSum += (g.creditsRequired - g.creditsEarned).clamp(0, 999999);
+  }
+  final overallDeficit = (result.totalCreditsRequired - result.totalCreditsEarned).clamp(0, 999999);
+  final totalDeficit = max(overallDeficit, groupDeficitsSum);
+
   final extDeficit =
       (result.externalCreditsRequired - result.externalCreditsEarned).clamp(0, 999999);
   final effectiveDeficit = max(totalDeficit, extDeficit);

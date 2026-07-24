@@ -1,9 +1,13 @@
 // 檔案名稱：course_selection_page.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/course_selection_service.dart';
+import '../../services/offline_error_handler.dart';
 import 'course_status_tab.dart';
 import 'course_query_tab.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
+import '../../widgets/glass/glass_dialog.dart';
 
 class CourseSelectionPage extends StatefulWidget {
   // 控制是否開啟查詢/加退選功能
@@ -42,8 +46,23 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
       // 【修改】只有在「非唯讀模式」(enableQuery為true) 時，才跳出免責聲明
       if (widget.enableQuery) {
         _showDisclaimerDialog();
+        _checkAndSwitchToQueryTab();
       }
     });
+  }
+
+  Future<void> _checkAndSwitchToQueryTab() async {
+    if (!widget.enableQuery) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final exportedIds = prefs.getStringList('exported_course_ids');
+      if (exportedIds != null && exportedIds.isNotEmpty) {
+        // 切換到第二個分頁 (課程查詢/加退選)
+        _tabController.animateTo(1);
+      }
+    } catch (e) {
+      debugPrint("檢查匯出課程失敗: $e");
+    }
   }
 
   Future<void> _loadMyCourses() async {
@@ -56,6 +75,7 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
     try {
       final result = await CourseSelectionService.instance
           .fetchSelectionResult();
+      if (!mounted) return;
       final SelectionState state = result['state'];
       final List<CourseSelectionData> data = result['data'];
 
@@ -76,6 +96,12 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
         });
       }
     } catch (e) {
+      if (e is OfflineDisabledException) {
+        if (mounted) await OfflineErrorHandler.show(context, e);
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _message = "發生錯誤：$e";
@@ -99,7 +125,7 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
 
         if (width < 800) {
           // Mobile Layout (Keep exact existing layout)
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Text(widget.enableQuery ? "選課系統" : "目前選課狀態"),
               centerTitle: true,
@@ -131,7 +157,7 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
           );
         } else if (width < 1100) {
           // Medium Layout: Split into two parts: Left is "目前選課狀態", Right is "課程查詢/加退選"
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Text(widget.enableQuery ? "選課系統" : "目前選課狀態"),
               centerTitle: true,
@@ -181,7 +207,7 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
           );
         } else {
           // Wide Layout: Left: "目前選課狀態", Middle: "課表預覽", Right: "課程查詢/加退選"
-          return Scaffold(
+          return GlassPageScaffold(
             appBar: AppBar(
               title: Text(widget.enableQuery ? "選課系統" : "目前選課狀態"),
               centerTitle: true,
@@ -280,59 +306,55 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
 
   void _showDisclaimerDialog() {
     final colorScheme = Theme.of(context).colorScheme;
-    showDialog(
+    showGlassDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: colorScheme.cardBackground,
-        title: Row(
+      title: Row(
+        children: [
+          const SizedBox(width: 10),
+          Text(
+            "免責聲明",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primaryText,
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(width: 10),
             Text(
-              "免責聲明",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.primaryText,
-              ),
+              "本功能僅為提供手機選課之便利，請勿過度依賴。",
+              style: TextStyle(fontSize: 16, color: colorScheme.primaryText),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "⚠️ 請務必再次確認",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "選完課之後，請一定要前往「學校官網」確認無誤。\n\n若是這邊操作的結果和最終學校系統收到的結果不一致，開發者不負擔任何責任。\n\n因此，請務必進行二次檢查。",
+              style: TextStyle(height: 1.5, color: colorScheme.bodyText),
             ),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "本功能僅為提供手機選課之便利，請勿過度依賴。",
-                style: TextStyle(fontSize: 16, color: colorScheme.primaryText),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "⚠️ 請務必再次確認",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "選完課之後，請一定要前往「學校官網」確認無誤。\n\n若是這邊操作的結果和最終學校系統收到的結果不一致，開發者不負擔任何責任。\n\n因此，請務必進行二次檢查。",
-                style: TextStyle(height: 1.5, color: colorScheme.bodyText),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+      ),
+      actions: [
+        Builder(
+          builder: (dialogCtx) => ElevatedButton(
+            onPressed: () => Navigator.pop(dialogCtx),
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text("我了解，我會去官網檢查"),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

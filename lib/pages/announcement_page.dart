@@ -9,8 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/elearn_bulletin_service.dart';
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_dropdown.dart';
 
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({Key? key}) : super(key: key);
@@ -29,7 +33,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   // --- 篩選與設定變數 ---
   int _pageSize = 30; // 預設 30 筆
   final List<int> _pageSizeOptions = [30, 50, 100];
-  
+
   String? _selectedCourse;
   List<String> _courseOptions = [];
 
@@ -45,7 +49,8 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   Future<void> _loadReadStatus() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _readBulletinIds = (prefs.getStringList('read_bulletin_ids') ?? []).toSet();
+      _readBulletinIds = (prefs.getStringList('read_bulletin_ids') ?? [])
+          .toSet();
     });
   }
 
@@ -64,7 +69,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       // 根據 _pageSize 決定抓取數量
       var data = await ElearnBulletinService.instance.fetchBulletins(
         forceRefresh: forceRefresh,
-        pageSize: _pageSize, 
+        pageSize: _pageSize,
       );
 
       // 依照 effectiveTime 排序 (新的在上面)
@@ -75,26 +80,34 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       for (var b in data) {
         if (b.courseName.isNotEmpty) courses.add(b.courseName);
       }
-      
+
       if (mounted) {
         setState(() {
           _allBulletins = data;
           _courseOptions = courses.toList()..sort();
-          
+
           // 如果切換筆數後，原本選的課程不在新名單中，重置選擇
-          if (_selectedCourse != null && !_courseOptions.contains(_selectedCourse)) {
+          if (_selectedCourse != null &&
+              !_courseOptions.contains(_selectedCourse)) {
             _selectedCourse = null;
           }
-          
+
           _applyFilter();
           _isLoading = false;
         });
       }
     } catch (e) {
+      if (e is OfflineDisabledException) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          await OfflineErrorHandler.show(context, e);
+        }
+        return;
+      }
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("載入失敗: $e"), backgroundColor: _themeColor),
+          SnackBar(content: Text("載入失敗: $e"), backgroundColor: _themeColor, duration: const Duration(seconds: 2)),
         );
       }
     }
@@ -112,13 +125,24 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     });
   }
 
-  Widget _buildListColumn(BuildContext context, bool isDark, ColorScheme colorScheme) {
+  Widget _buildListColumn(
+    BuildContext context,
+    bool isDark,
+    ColorScheme colorScheme,
+  ) {
     return Column(
       children: [
         // --- 頂部設定區 ---
         Container(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
-          color: colorScheme.cardBackground,
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: 8,
+          ),
+          color: LayoutStyleNotifier.instance.isLiquidGlass
+              ? Colors.transparent
+              : colorScheme.cardBackground,
           child: Row(
             children: [
               // 左邊：顯示筆數
@@ -128,17 +152,21 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                   label: "顯示筆數",
                   items: _pageSizeOptions.map((s) => s.toString()).toList(),
                   value: _pageSize.toString(),
-                  displayMap: { for (var s in _pageSizeOptions) s.toString(): "$s 筆" },
-                  dense: true,
-                  onChanged: _isLoading ? null : (val) {
-                    if (val != null) {
-                      final newSize = int.tryParse(val);
-                      if (newSize != null && newSize != _pageSize) {
-                        setState(() => _pageSize = newSize);
-                        _fetchData(forceRefresh: true);
-                      }
-                    }
+                  displayMap: {
+                    for (var s in _pageSizeOptions) s.toString(): "$s 筆",
                   },
+                  dense: true,
+                  onChanged: _isLoading
+                      ? null
+                      : (val) {
+                          if (val != null) {
+                            final newSize = int.tryParse(val);
+                            if (newSize != null && newSize != _pageSize) {
+                              setState(() => _pageSize = newSize);
+                              _fetchData(forceRefresh: true);
+                            }
+                          }
+                        },
                 ),
               ),
               const SizedBox(width: 10),
@@ -149,11 +177,13 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                   label: "課程篩選",
                   items: ["", ..._courseOptions],
                   value: _selectedCourse ?? "",
-                  displayMap: { "": "全部課程", for (var c in _courseOptions) c: c },
+                  displayMap: {"": "全部課程", for (var c in _courseOptions) c: c},
                   dense: true,
                   onChanged: (val) {
                     setState(() {
-                      _selectedCourse = (val == null || val.isEmpty) ? null : val;
+                      _selectedCourse = (val == null || val.isEmpty)
+                          ? null
+                          : val;
                       _applyFilter();
                     });
                   },
@@ -162,21 +192,32 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
             ],
           ),
         ),
-       
 
         // --- 列表區 ---
         Expanded(
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: _themeColor))
               : _filteredBulletins.isEmpty
-                  ? Center(child: Text("沒有公告資料", style: TextStyle(color: isDark ? colorScheme.subtitleText : Colors.black54)))
-                  : ListView.builder(
-                      itemCount: _filteredBulletins.length,
-                      padding: const EdgeInsets.all(12),
-                      itemBuilder: (context, index) {
-                        return _buildBulletinCard(_filteredBulletins[index]);
-                      },
+              ? Center(
+                  child: Text(
+                    "沒有公告資料",
+                    style: TextStyle(
+                      color: isDark ? colorScheme.subtitleText : Colors.black54,
                     ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _filteredBulletins.length,
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    12,
+                    12,
+                    LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 12,
+                  ),
+                  itemBuilder: (context, index) {
+                    return _buildBulletinCard(_filteredBulletins[index]);
+                  },
+                ),
         ),
       ],
     );
@@ -185,7 +226,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   Widget _buildDetailPlaceholder(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.isDark;
-    return Scaffold(
+    return GlassPageScaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -193,7 +234,9 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
             Icon(
               Icons.campaign_outlined,
               size: 64,
-              color: isDark ? colorScheme.subtitleText.withOpacity(0.5) : Colors.grey[400],
+              color: isDark
+                  ? colorScheme.subtitleText.withValues(alpha: 0.5)
+                  : Colors.grey[400],
             ),
             const SizedBox(height: 16),
             Text(
@@ -217,7 +260,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isWideScreen = screenWidth >= 900;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("網大公告"),
         centerTitle: true,
@@ -225,15 +268,12 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => _fetchData(forceRefresh: true),
-          )
+          ),
         ],
         bottom: isWideScreen
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(1.0),
-                child: Container(
-                  color: colorScheme.borderColor,
-                  height: 1.0,
-                ),
+                child: Container(color: colorScheme.borderColor, height: 1.0),
               )
             : null,
       ),
@@ -275,105 +315,135 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = colorScheme.isDark;
     final isSelected = _selectedBulletin?.id == item.id;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
-    return Card(
-      elevation: isSelected ? 4 : 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isSelected
-            ? BorderSide(color: _themeColor, width: 2)
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () async {
-          await _markAsRead(item.id);
-          final screenWidth = MediaQuery.of(context).size.width;
-          if (screenWidth >= 900) {
-            setState(() {
-              _selectedBulletin = item;
-            });
-          } else {
-            if (context.mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AnnouncementDetailPage(bulletin: item, themeColor: _themeColor),
+    final Widget cardChild = InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        await _markAsRead(item.id);
+        final screenWidth = MediaQuery.of(context).size.width;
+        if (screenWidth >= 900) {
+          setState(() {
+            _selectedBulletin = item;
+          });
+        } else {
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AnnouncementDetailPage(
+                  bulletin: item,
+                  themeColor: _themeColor,
                 ),
-              );
-            }
+              ),
+            );
           }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark ? colorScheme.subtleBackground : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(4),
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? colorScheme.subtleBackground
+                          : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      item.courseName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? colorScheme.bodyText : Colors.grey[800],
                       ),
-                      child: Text(
-                        item.courseName,
-                        style: TextStyle(
-                          fontSize: 12, 
-                          color: isDark ? colorScheme.bodyText : Colors.grey[800],
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (showNewBadge)
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _themeColor,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        "NEW",
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                item.title,
-                style: TextStyle(
-                  fontSize: 16, 
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? colorScheme.primaryText : Colors.black87,
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    timeStr, 
-                    style: TextStyle(
-                      fontSize: 12, 
-                      color: isDark ? colorScheme.subtitleText : Colors.grey[500],
+                if (showNewBadge)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _themeColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      "NEW",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  if (item.uploads.isNotEmpty)
-                    Icon(Icons.attach_file, size: 16, color: _themeColor),
-                ],
-              )
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              item.title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDark ? colorScheme.primaryText : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text(
+                  timeStr,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? colorScheme.subtitleText : Colors.grey[500],
+                  ),
+                ),
+                const Spacer(),
+                if (item.uploads.isNotEmpty)
+                  Icon(Icons.attach_file, size: 16, color: _themeColor),
+              ],
+            ),
+          ],
         ),
       ),
     );
+
+    return isLiquidGlass
+        ? Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(
+              context,
+              borderRadius: 12,
+              isSelected: isSelected,
+              selectedColor: _themeColor,
+            ),
+            child: cardChild,
+          )
+        : Card(
+            elevation: isSelected ? 4 : 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: isSelected
+                  ? BorderSide(color: _themeColor, width: 2)
+                  : BorderSide.none,
+            ),
+            child: cardChild,
+          );
   }
 }
 
@@ -404,7 +474,7 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
 
   // 用來記錄已經解析的純文字內容，防止連續換行
   final StringBuffer _parsedTextBuffer = StringBuffer();
-  
+
   // 用來記錄所有出現過的內容指紋 (用來刪除重複)
   final Set<String> _seenContentSignature = {};
 
@@ -414,16 +484,29 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
 
   Future<void> _downloadAndOpen(int refId, String fileName) async {
     if (_downloading) return;
-    setState(() { _downloading = true; });
+    setState(() {
+      _downloading = true;
+    });
     try {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("下載中: $fileName")));
-      File file = await ElearnBulletinService.instance.downloadFile(refId, fileName);
-      setState(() { _downloading = false; });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("下載中: $fileName"), duration: const Duration(seconds: 2)));
+      File file = await ElearnBulletinService.instance.downloadFile(
+        refId,
+        fileName,
+      );
+      setState(() {
+        _downloading = false;
+      });
       await OpenFilex.open(file.path);
     } catch (e) {
       if (mounted) {
-        setState(() { _downloading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("錯誤: $e"), backgroundColor: Colors.red));
+        setState(() {
+          _downloading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("錯誤: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 2)),
+        );
       }
     }
   }
@@ -438,7 +521,10 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("無法開啟連結: $urlString"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("無法開啟連結: $urlString"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),),
         );
       }
     }
@@ -455,14 +541,19 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
     final isDark = colorScheme.isDark;
 
     final contentWidget = SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SelectableText(
             widget.bulletin.title,
             style: TextStyle(
-              fontSize: 22, 
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: isDark ? colorScheme.primaryText : Colors.black87,
             ),
@@ -471,7 +562,7 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
           Text(
             widget.bulletin.courseName,
             style: TextStyle(
-              color: isDark ? colorScheme.secondary : widget.themeColor, 
+              color: isDark ? colorScheme.secondary : widget.themeColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -481,56 +572,79 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
           SelectableText.rich(
             TextSpan(
               style: TextStyle(
-                fontSize: 16, 
-                height: 1.6, 
+                fontSize: 16,
+                height: 1.6,
                 color: isDark ? colorScheme.bodyText : Colors.black87,
               ),
-              children: _parseNode(parser.parse(widget.bulletin.contentRaw).body, isDark, colorScheme),
+              children: _parseNode(
+                parser.parse(widget.bulletin.contentRaw).body,
+                isDark,
+                colorScheme,
+              ),
             ),
           ),
 
           if (widget.bulletin.uploads.isNotEmpty) ...[
             const Divider(height: 30),
             Text(
-              "附件", 
+              "附件",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: isDark ? colorScheme.primaryText : Colors.black87,
               ),
             ),
-            ...widget.bulletin.uploads.map((f) => ListTile(
-                  leading: Icon(Icons.file_present, color: isDark ? colorScheme.iconColor : Colors.grey[700]),
-                  title: Text(
-                    f.name,
-                    style: TextStyle(color: isDark ? colorScheme.primaryText : Colors.black87),
+            ...widget.bulletin.uploads
+                .map(
+                  (f) => ListTile(
+                    leading: Icon(
+                      Icons.file_present,
+                      color: isDark ? colorScheme.iconColor : Colors.grey[700],
+                    ),
+                    title: Text(
+                      f.name,
+                      style: TextStyle(
+                        color: isDark
+                            ? colorScheme.primaryText
+                            : Colors.black87,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(
+                        Icons.download,
+                        color: isDark ? colorScheme.primary : widget.themeColor,
+                      ),
+                      onPressed: _downloading
+                          ? null
+                          : () => _downloadAndOpen(f.referenceId, f.name),
+                    ),
                   ),
-                  trailing: IconButton(
-                    icon: Icon(Icons.download, color: isDark ? colorScheme.primary : widget.themeColor),
-                    onPressed: _downloading ? null : () => _downloadAndOpen(f.referenceId, f.name),
-                  ),
-                )).toList(),
-          ]
+                )
+                .toList(),
+          ],
         ],
       ),
     );
 
-    return Scaffold(
-      appBar: widget.showAppBar ? AppBar(
-        title: const Text("公告詳情"),
-      ) : null,
+    return GlassPageScaffold(
+      appBar: widget.showAppBar ? AppBar(title: const Text("公告詳情")) : null,
       body: contentWidget,
     );
   }
 
   /// 遞迴解析 Node
-  List<InlineSpan> _parseNode(dom.Node? node, bool isDark, ColorScheme colorScheme, {bool insideLink = false}) {
+  List<InlineSpan> _parseNode(
+    dom.Node? node,
+    bool isDark,
+    ColorScheme colorScheme, {
+    bool insideLink = false,
+  }) {
     if (node == null) return [];
     List<InlineSpan> spans = [];
 
     if (node.nodeType == dom.Node.TEXT_NODE) {
       String text = node.text ?? "";
-      text = text.replaceAll('\u00A0', ' '); 
-      
+      text = text.replaceAll('\u00A0', ' ');
+
       String trimmedText = text.trim();
       if (trimmedText.isEmpty) return [];
 
@@ -568,90 +682,128 @@ class _AnnouncementDetailPageState extends State<AnnouncementDetailPage> {
       } else {
         // 標記：這段內容顯示了
         _isPreviousContentSkipped = false;
-        
+
         spans.add(TextSpan(text: text));
         _parsedTextBuffer.write(text);
       }
-
     } else if (node.nodeType == dom.Node.ELEMENT_NODE) {
       dom.Element element = node as dom.Element;
-      
+
       // 過濾垃圾標籤
-      if (['style', 'script', 'head', 'meta', 'link', 'title', 'xml', 'iframe'].contains(element.localName)) {
+      if ([
+        'style',
+        'script',
+        'head',
+        'meta',
+        'link',
+        'title',
+        'xml',
+        'iframe',
+      ].contains(element.localName)) {
         return [];
       }
       String style = element.attributes['style']?.toLowerCase() ?? "";
-      if (style.contains('display: none') || style.contains('visibility: hidden')) {
+      if (style.contains('display: none') ||
+          style.contains('visibility: hidden')) {
         return [];
       }
 
-      bool isBold = (element.localName == 'b' || element.localName == 'strong' || style.contains("font-weight: 700"));
+      bool isBold =
+          (element.localName == 'b' ||
+          element.localName == 'strong' ||
+          style.contains("font-weight: 700"));
       bool isLinkElement = (element.localName == 'a');
 
       List<InlineSpan> childrenSpans = [];
       for (var child in element.nodes) {
-        childrenSpans.addAll(_parseNode(child, isDark, colorScheme, insideLink: insideLink || isLinkElement));
+        childrenSpans.addAll(
+          _parseNode(
+            child,
+            isDark,
+            colorScheme,
+            insideLink: insideLink || isLinkElement,
+          ),
+        );
       }
 
       // 處理換行
       if (element.localName == 'br') {
         if (!_parsedTextBuffer.toString().endsWith("\n")) {
-           spans.add(const TextSpan(text: "\n"));
-           _parsedTextBuffer.write("\n");
+          spans.add(const TextSpan(text: "\n"));
+          _parsedTextBuffer.write("\n");
         }
-      } 
+      }
       // 處理連結
       else if (isLinkElement) {
         String? href = element.attributes['href'];
         if (href != null && href.startsWith('/')) {
           href = "https://elearn.nsysu.edu.tw$href";
         }
-        
+
         final recognizer = TapGestureRecognizer()
-          ..onTap = () { if (href != null) _launchURL(href); };
+          ..onTap = () {
+            if (href != null) _launchURL(href);
+          };
 
         // 如果 childrenSpans 是空的 (代表裡面的文字被去重過濾掉了)，這個連結也會自然消失
         // 這正是我們想要的效果
-        if (childrenSpans.isNotEmpty || (href != null && childrenSpans.isEmpty)) {
-           // 只有當連結內有文字，或者我們想顯示裸連結時才加入
-           // 但根據上面的邏輯，如果文字被過濾，childrenSpans 會是空的
-           // 為了保險，如果 childrenSpans 有東西才顯示 span
-           if (childrenSpans.isNotEmpty) {
-             spans.add(TextSpan(
-               style: TextStyle(color: isDark ? colorScheme.secondary : Colors.blue, decoration: TextDecoration.underline),
-               children: childrenSpans,
-               recognizer: recognizer,
-             ));
-           } else if (href != null && !_isPreviousContentSkipped) {
-             // 只有當「不是因為重複而被過濾」的情況下，才補上 href 本身當作文字
-             // (這處理 <a href="..."></a> 這種空標籤的情況)
-              spans.add(TextSpan(
-               text: href,
-               style: TextStyle(color: isDark ? colorScheme.secondary : Colors.blue, decoration: TextDecoration.underline),
-               recognizer: recognizer,
-             ));
-           }
+        if (childrenSpans.isNotEmpty ||
+            (href != null && childrenSpans.isEmpty)) {
+          // 只有當連結內有文字，或者我們想顯示裸連結時才加入
+          // 但根據上面的邏輯，如果文字被過濾，childrenSpans 會是空的
+          // 為了保險，如果 childrenSpans 有東西才顯示 span
+          if (childrenSpans.isNotEmpty) {
+            spans.add(
+              TextSpan(
+                style: TextStyle(
+                  color: isDark ? colorScheme.secondary : Colors.blue,
+                  decoration: TextDecoration.underline,
+                ),
+                children: childrenSpans,
+                recognizer: recognizer,
+              ),
+            );
+          } else if (href != null && !_isPreviousContentSkipped) {
+            // 只有當「不是因為重複而被過濾」的情況下，才補上 href 本身當作文字
+            // (這處理 <a href="..."></a> 這種空標籤的情況)
+            spans.add(
+              TextSpan(
+                text: href,
+                style: TextStyle(
+                  color: isDark ? colorScheme.secondary : Colors.blue,
+                  decoration: TextDecoration.underline,
+                ),
+                recognizer: recognizer,
+              ),
+            );
+          }
         }
-      } 
-      else {
-        spans.add(TextSpan(
-          style: isBold ? const TextStyle(fontWeight: FontWeight.bold) : null,
-          children: childrenSpans
-        ));
+      } else {
+        spans.add(
+          TextSpan(
+            style: isBold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+            children: childrenSpans,
+          ),
+        );
 
-        if (['div', 'p', 'li', 'ul', 'h1', 'h2', 'h3', 'tr'].contains(element.localName)) {
-           if (!_parsedTextBuffer.toString().endsWith("\n") && _parsedTextBuffer.isNotEmpty) {
-             spans.add(const TextSpan(text: "\n"));
-             _parsedTextBuffer.write("\n");
-           }
+        if ([
+          'div',
+          'p',
+          'li',
+          'ul',
+          'h1',
+          'h2',
+          'h3',
+          'tr',
+        ].contains(element.localName)) {
+          if (!_parsedTextBuffer.toString().endsWith("\n") &&
+              _parsedTextBuffer.isNotEmpty) {
+            spans.add(const TextSpan(text: "\n"));
+            _parsedTextBuffer.write("\n");
+          }
         }
       }
     }
     return spans;
   }
 }
-extension on dom.Element {
-  List<String> get styles => attributes['style']?.split(';') ?? [];
-}
-
-

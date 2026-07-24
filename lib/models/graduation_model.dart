@@ -1,21 +1,19 @@
-import 'dart:convert';
-
 class GraduationData {
   final String checkTime; // 審查時間
   final String department; // 系級
   final String studentName; // 姓名
   final String studentId; // 學號
-  
+
   // 學分統計
   final int minCredits; // 最低畢業學分
   final int currentCredits; // 目前累計學分
-  
+
   // 缺修必修 (存課程名稱)
   final List<String> missingRequiredCourses;
-  
+
   // 通識狀態
   final List<GenEdStatus> genEdStatuses;
-  
+
   // 已修選修 (顯示用)
   final List<String> takenElectiveCourses;
 
@@ -53,11 +51,17 @@ class GraduationData {
       studentId: json['studentId'] ?? '',
       minCredits: json['minCredits'] ?? 128,
       currentCredits: json['currentCredits'] ?? 0,
-      missingRequiredCourses: List<String>.from(json['missingRequiredCourses'] ?? []),
-      genEdStatuses: (json['genEdStatuses'] as List?)
-          ?.map((e) => GenEdStatus.fromJson(e))
-          .toList() ?? [],
-      takenElectiveCourses: List<String>.from(json['takenElectiveCourses'] ?? []),
+      missingRequiredCourses: List<String>.from(
+        json['missingRequiredCourses'] ?? [],
+      ),
+      genEdStatuses:
+          (json['genEdStatuses'] as List?)
+              ?.map((e) => GenEdStatus.fromJson(e))
+              .toList() ??
+          [],
+      takenElectiveCourses: List<String>.from(
+        json['takenElectiveCourses'] ?? [],
+      ),
     );
   }
 }
@@ -69,8 +73,8 @@ class GenEdStatus {
   final List<String> details; // 子細項 (例如底下的課程列表)
 
   GenEdStatus({
-    required this.name, 
-    required this.status, 
+    required this.name,
+    required this.status,
     required this.description,
     this.details = const [], // 預設為空
   });

@@ -3,9 +3,11 @@ import '../models/program_model.dart';
 import '../services/department_service.dart';
 import '../services/program_application_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
 import '../utils/completion_rate.dart';
 import '../utils/program_matching.dart';
 import '../widgets/searchable_dropdown_field.dart';
+import 'glass/glass_card.dart';
 
 enum LeftTab { allPrograms, yourPrograms, searchPrograms }
 
@@ -118,10 +120,11 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
   Widget _buildTabs(ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryCardBackground,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: glassCardDecoration(context, borderRadius: 12) ??
+          BoxDecoration(
+            color: colorScheme.secondaryCardBackground,
+            borderRadius: BorderRadius.circular(12),
+          ),
       child: Row(
         children: [
           _buildTabItem(LeftTab.allPrograms, '全部學程', colorScheme),
@@ -140,19 +143,27 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? colorScheme.cardBackground : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
+          decoration: isSelected
+              ? (LayoutStyleNotifier.instance.isLiquidGlass
+                  ? BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
+                    )
+                  : BoxDecoration(
+                      color: colorScheme.cardBackground,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ))
+              : const BoxDecoration(),
           child: Text(
             label,
             textAlign: TextAlign.center,
@@ -186,7 +197,11 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
+            CircularProgressIndicator(
+              color: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? colorScheme.accentBlue
+                  : null,
+            ),
             const SizedBox(height: 12),
             Text(
               '載入中…',
@@ -202,7 +217,11 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
+            CircularProgressIndicator(
+              color: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? colorScheme.accentBlue
+                  : null,
+            ),
             const SizedBox(height: 12),
             Text(
               '計算學程進度中…',
@@ -356,7 +375,11 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
+            CircularProgressIndicator(
+              color: LayoutStyleNotifier.instance.isLiquidGlass
+                  ? colorScheme.accentBlue
+                  : null,
+            ),
             const SizedBox(height: 12),
             Text(
               statusMsg.isEmpty ? '載入中…' : statusMsg,
@@ -482,21 +505,35 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
     }
 
     final isMatched = matchedProgram != null && matchedVersion != null;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: colorScheme.cardBackground,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isMatched
-                ? colorScheme.borderColor
-                : colorScheme.borderColor.withValues(alpha: 0.5),
-          ),
-        ),
+        decoration: isLiquidGlass
+            ? BoxDecoration(
+                color: colorScheme.isDark
+                    ? Colors.black.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: colorScheme.isDark
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : Colors.black.withValues(alpha: 0.15),
+                  width: 1.0,
+                ),
+              )
+            : BoxDecoration(
+                color: colorScheme.cardBackground,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isMatched
+                      ? colorScheme.borderColor
+                      : colorScheme.borderColor.withValues(alpha: 0.5),
+                ),
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -536,12 +573,23 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
     String message,
     IconData icon,
   ) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryCardBackground,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: isLiquidGlass
+          ? BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: colorScheme.isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.08),
+              ),
+            )
+          : BoxDecoration(
+              color: colorScheme.secondaryCardBackground,
+              borderRadius: BorderRadius.circular(8),
+            ),
       child: Row(
         children: [
           Icon(icon, size: 16, color: colorScheme.subtitleText),
@@ -558,14 +606,25 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
   }
 
   Widget _buildStaleFavoriteCard(ColorScheme colorScheme, FavoriteProgram fav) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryCardBackground,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: isLiquidGlass
+          ? BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: colorScheme.isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.08),
+              ),
+            )
+          : BoxDecoration(
+              color: colorScheme.secondaryCardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.borderColor),
+            ),
       child: Row(
         children: [
           Icon(Icons.error_outline, size: 16, color: colorScheme.subtitleText),
@@ -709,30 +768,62 @@ class _CourseProgressLeftPanelState extends State<CourseProgressLeftPanel> {
               : const Color(0xFFF0FFF0))
         : colorScheme.cardBackground;
 
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    BoxDecoration? finalDecoration;
+    if (isLiquidGlass) {
+      final isDark = colorScheme.isDark;
+      finalDecoration = BoxDecoration(
+        color: isDark
+            ? Colors.black.withValues(alpha: isComplete ? 0.25 : 0.12)
+            : Colors.white.withValues(alpha: isComplete ? 0.35 : 0.2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isComplete
+              ? Colors.green.withValues(alpha: 0.5)
+              : isSelected
+                  ? colorScheme.accentBlue.withValues(alpha: 0.6)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : Colors.black.withValues(alpha: 0.15)),
+          width: borderWidth,
+        ),
+        boxShadow: isComplete
+            ? [
+                BoxShadow(
+                  color: Colors.green.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      );
+    } else {
+      finalDecoration = BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow: isComplete
+            ? [
+                BoxShadow(
+                  color:
+                      (colorScheme.isDark
+                              ? Colors.green[400]!
+                              : Colors.green[300]!)
+                          .withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: borderColor, width: borderWidth),
-          // 100% 完成加上外發光
-          boxShadow: isComplete
-              ? [
-                  BoxShadow(
-                    color:
-                        (colorScheme.isDark
-                                ? Colors.green[400]!
-                                : Colors.green[300]!)
-                            .withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
-        ),
+        decoration: finalDecoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

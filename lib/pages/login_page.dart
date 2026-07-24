@@ -15,21 +15,39 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../utils/utils.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/aurora_background.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_dialog.dart';
 import 'main_menu_page.dart';
+import 'initialization_page.dart';
+import '../services/offline_mode_service.dart';
 import '../services/storage_service.dart';
 import '../services/session_service.dart';
+import '../services/http_client_factory.dart';
 
 bool _obscurePassword = true;
 
-class CaptchaAutoLoginPage extends StatefulWidget {
-  final bool isRelogin;
-  CaptchaAutoLoginPage({this.isRelogin = false});
-
-  @override
-  State<CaptchaAutoLoginPage> createState() => _CaptchaAutoLoginPageState();
+/// 依是否已初始化過，決定登入成功後直奔主頁或進入初始化頁。
+Widget buildPostLoginDestination({
+  required bool hasInitialized,
+  required String cookies,
+  required String userAgent,
+}) {
+  return hasInitialized
+      ? MainMenuPage(cookies: cookies, userAgent: userAgent)
+      : InitializationPage(cookies: cookies, userAgent: userAgent);
 }
 
-class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
+class LoginPage extends StatefulWidget {
+  final bool isRelogin;
+  LoginPage({this.isRelogin = false});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -62,37 +80,50 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
   }
 
   void _showOfflineDialog() {
-    showDialog(
+    showGlassDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text("離線模式預覽"),
-        content: Text("目前偵測不到網路連線，無法登入伺服器。\n\n您仍可進入系統查看先前讀取過的快取資料。"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _result = "已取消離線登入";
-                _isAutoLoggingIn = false;
-                _isLoading = false;
-              });
-            },
-            child: Text("取消"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _enterOfflineMode();
-            },
-            child: Text("確認進入"),
-          ),
+      title: const Row(
+        children: [
+          Icon(Icons.cloud_off_rounded, color: Colors.amber),
+          SizedBox(width: 8),
+          Text("離線模式預覽"),
         ],
       ),
+      content: const Text(
+        "目前偵測不到網路連線，無法登入伺服器。\n\n"
+        "您仍可進入系統查看先前讀取過的快取資料。\n"
+        "若要使用需要網路的功能，請連接網路並重新開啟 App。",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context, rootNavigator: true).pop();
+            setState(() {
+              _result = "已取消離線登入";
+              _isAutoLoggingIn = false;
+              _isLoading = false;
+            });
+          },
+          child: const Text("取消"),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context, rootNavigator: true).pop();
+            _enterOfflineMode();
+          },
+          child: const Text(
+            "確認進入",
+            style: TextStyle(color: Colors.blue),
+          ),
+        ),
+      ],
     );
   }
 
   void _enterOfflineMode() {
+    // 設全域離線旗標，所有 service 的 http 呼叫會被攔截
+    OfflineModeService.instance.enterOfflineMode();
     String userAgent = "Mozilla/5.0 (Offline Mode)";
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -124,10 +155,16 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
   }
 
   Future<void> _startLoginProcess() async {
+    // 離線模式:即使網路恢復也不允許聯網,必須重啟 App
+    if (OfflineModeService.instance.isOffline) {
+      _showOfflineDialog();
+      return;
+    }
+
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("請輸入學號和密碼")));
+      ).showSnackBar(SnackBar(content: Text("請輸入學號和密碼"), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -154,7 +191,7 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
         _handleLoginError("帳號或密碼錯誤");
         return;
       }
-      final http.Client client = http.Client();
+      final http.Client client = createHttpClient();
 
       try {
         final String base64md5Password = Utils.base64md5(password);
@@ -225,6 +262,15 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
     String userAgent =
         "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36";
 
+    // 依是否已初始化過決定目的地
+    final prefs = await SharedPreferences.getInstance();
+    final bool hasInitialized = prefs.getBool('has_initialized') ?? false;
+    final destination = buildPostLoginDestination(
+      hasInitialized: hasInitialized,
+      cookies: cookieString,
+      userAgent: userAgent,
+    );
+
     if (mounted) {
       setState(() {
         _result = "✅ 登入成功！";
@@ -233,10 +279,7 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (context) =>
-              MainMenuPage(cookies: cookieString, userAgent: userAgent),
-        ),
+        MaterialPageRoute(builder: (context) => destination),
         (route) => false,
       );
     }
@@ -318,6 +361,33 @@ class _CaptchaAutoLoginPageState extends State<CaptchaAutoLoginPage> {
         ),
       ],
     );
+
+    if (LayoutStyleNotifier.instance.isLiquidGlass) {
+      return Stack(
+        children: [
+          const AuroraBackground(),
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(30),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 450),
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: glassCardDecoration(
+                      context,
+                      borderRadius: 24,
+                    ),
+                    child: formContent,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Scaffold(
       backgroundColor: colorScheme.pageBackground,

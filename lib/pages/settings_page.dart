@@ -3,7 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme_notifier.dart';
 import '../theme/font_notifier.dart';
+import '../theme/layout_style_notifier.dart';
 import '../theme/app_theme.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
 import '../services/orientation_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -39,13 +41,18 @@ class _SettingsPageState extends State<SettingsPage> {
     final isWide = MediaQuery.of(context).size.width >= 800;
 
     if (isWide) {
-      return Scaffold(
+      return GlassPageScaffold(
         appBar: AppBar(
           title: const Text("設定"),
           centerTitle: true,
-          backgroundColor: colorScheme.cardBackground,
+          backgroundColor: LayoutStyleNotifier.instance.isLiquidGlass
+              ? Colors.transparent
+              : colorScheme.cardBackground,
           foregroundColor: colorScheme.primaryText,
           elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
         ),
         backgroundColor: colorScheme.pageBackground,
         body: Row(
@@ -128,10 +135,13 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     // Mobile layout
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(title: const Text("設定"), centerTitle: true),
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+        ),
         children: [
           _buildMobileSettingsTile(
             context,
@@ -197,7 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       decoration: BoxDecoration(
         color: isSelected
-            ? colorScheme.accentBlue.withOpacity(0.08)
+            ? colorScheme.accentBlue.withValues(alpha: 0.08)
             : Colors.transparent,
         border: Border(
           left: BorderSide(
@@ -230,7 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: TextStyle(
                 fontSize: 13,
                 color: isSelected
-                    ? colorScheme.accentBlue.withOpacity(0.8)
+                    ? colorScheme.accentBlue.withValues(alpha: 0.8)
                     : colorScheme.subtitleText,
               ),
             ),
@@ -240,7 +250,7 @@ class _SettingsPageState extends State<SettingsPage> {
             size: 14,
             color: isSelected
                 ? colorScheme.accentBlue
-                : colorScheme.subtitleText.withOpacity(0.7),
+                : colorScheme.subtitleText.withValues(alpha: 0.7),
           ),
           onTap: () {
             setState(() {
@@ -279,7 +289,7 @@ class _SettingsPageState extends State<SettingsPage> {
       trailing: Icon(
         Icons.arrow_forward_ios_rounded,
         size: 14,
-        color: colorScheme.subtitleText.withOpacity(0.7),
+        color: colorScheme.subtitleText.withValues(alpha: 0.7),
       ),
       onTap: onTap,
     );
@@ -302,14 +312,17 @@ class _ThemeSettingsPageState extends State<ThemeSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: widget.isEmbedded
           ? null
           : AppBar(title: const Text("主題設定"), centerTitle: true),
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+        ),
         children: [
-          _buildThemeOption(context, ThemeMode.system, "系統預設"),
+          _buildThemeOption(context, ThemeMode.system, "系統"),
           Divider(height: 1, indent: 16, color: colorScheme.borderColor),
           _buildThemeOption(context, ThemeMode.light, "淺色模式"),
           Divider(height: 1, indent: 16, color: colorScheme.borderColor),
@@ -380,12 +393,15 @@ class _FontSettingsPageState extends State<FontSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: widget.isEmbedded
           ? null
           : AppBar(title: const Text("字型設定"), centerTitle: true),
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+        ),
         children: [
           _buildFontOption(context, 'system', "系統預設 (刪除已下載字型)"),
           Divider(height: 1, indent: 16, color: colorScheme.borderColor),
@@ -482,12 +498,12 @@ class _FontSettingsPageState extends State<FontSettingsPage> {
     FontNotifier.instance
         .setFontFamily('NotoSansTC')
         .then((_) {
-          Navigator.of(context).pop(); // 關閉對話框
+          Navigator.of(context, rootNavigator: true).pop(); // 關閉對話框
           _showSnackBar("Noto Sans 繁體中文字型下載並套用成功！");
           setState(() {});
         })
         .catchError((e) {
-          Navigator.of(context).pop(); // 關閉對話框
+          Navigator.of(context, rootNavigator: true).pop(); // 關閉對話框
           _showSnackBar("下載字型失敗，請檢查網路連線或稍後再試！", isError: true);
         });
   }
@@ -562,12 +578,15 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: widget.isEmbedded
           ? null
           : AppBar(title: const Text("進階功能設定"), centerTitle: true),
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
@@ -611,6 +630,7 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
             value: 3,
             colorScheme: colorScheme,
           ),
+
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -684,7 +704,7 @@ class _FeatureSettingsPageState extends State<FeatureSettingsPage> {
           style: TextStyle(
             fontSize: 13,
             color: isSelected
-                ? colorScheme.accentBlue.withOpacity(0.8)
+                ? colorScheme.accentBlue.withValues(alpha: 0.8)
                 : colorScheme.subtitleText,
           ),
         ),
@@ -727,11 +747,11 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final style = prefs.getString('main_menu_layout_style') ?? 'default';
+    final style = LayoutStyleNotifier.instance.value;
+    if (!mounted) return;
     setState(() {
       _currentStyle = style;
-      if (style == 'bento' || style == 'aurora') {
+      if (style == 'bento' || style == 'aurora' || style == 'liquid_glass') {
         _selectedCategoryIndex = 1;
       } else {
         _selectedCategoryIndex = 0;
@@ -740,22 +760,51 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
   }
 
   Future<void> _changeStyle(String style) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('main_menu_layout_style', style);
+    // 透過 notifier 寫入 prefs 並通知所有訂閱頁面（子頁面即時切換玻璃外觀）
+    await LayoutStyleNotifier.instance.set(style);
+    if (!mounted) return;
     setState(() {
       _currentStyle = style;
     });
   }
 
-  Widget _buildCategorySelector() {
+  Widget _buildCategorySelector({bool isLiquidGlass = false}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final Color bgColor = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.white.withValues(alpha: 0.30))
+        : colorScheme.subtleBackground;
+
+    final Border? border = isLiquidGlass
+        ? Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.45),
+            width: 1.0,
+          )
+        : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: colorScheme.subtleBackground,
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
+        border: border,
+        boxShadow: isLiquidGlass
+            ? [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.15)
+                      : Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -765,6 +814,7 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
               "簡單樣式",
               Icons.bolt_rounded,
               Colors.green,
+              isLiquidGlass: isLiquidGlass,
             ),
           ),
           Expanded(
@@ -773,6 +823,7 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
               "精緻特效",
               Icons.auto_awesome_rounded,
               Colors.amber,
+              isLiquidGlass: isLiquidGlass,
             ),
           ),
         ],
@@ -784,11 +835,19 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
     int index,
     String label,
     IconData icon,
-    MaterialColor activeColor,
-  ) {
+    MaterialColor activeColor, {
+    bool isLiquidGlass = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedCategoryIndex == index;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // liquid glass 模式：選中分頁使用半透明白底；非選中保持全透明
+    final Color selectedBg = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.55))
+        : colorScheme.cardBackground;
 
     return GestureDetector(
       onTap: () {
@@ -800,13 +859,23 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? colorScheme.cardBackground : Colors.transparent,
+          color: isSelected ? selectedBg : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
+          border: isSelected && isLiquidGlass
+              ? Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : Colors.white.withValues(alpha: 0.6),
+                  width: 1.0,
+                )
+              : null,
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 
+                      isLiquidGlass ? 0.08 : 0.05,
+                    ),
+                    blurRadius: isLiquidGlass ? 8 : 4,
                     offset: const Offset(0, 2),
                   ),
                 ]
@@ -820,7 +889,7 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
               size: 16,
               color: isSelected
                   ? (isDark
-                        ? activeColor.withOpacity(0.9)
+                        ? activeColor.withValues(alpha: 0.9)
                         : activeColor.shade800)
                   : colorScheme.subtitleText,
             ),
@@ -865,6 +934,10 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
         icon = Icons.blur_on_rounded;
         color = Colors.purple;
         break;
+      case 'liquid_glass':
+        icon = Icons.navigation_rounded;
+        color = Colors.pink;
+        break;
       default:
         icon = Icons.help_outline_rounded;
         color = Colors.grey;
@@ -875,19 +948,20 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: isDark ? color.withOpacity(0.15) : color.withOpacity(0.1),
+        color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(
         icon,
-        color: isDark ? color.withOpacity(0.9) : color.shade700,
+        color: isDark ? color.withValues(alpha: 0.9) : color.shade700,
         size: 20,
       ),
     );
   }
 
-  Widget _buildOptionsList() {
+  Widget _buildOptionsList({bool isLiquidGlass = false}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     List<Widget> options = [];
     if (_selectedCategoryIndex == 0) {
@@ -900,19 +974,42 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
       options = [
         _buildOption("bento", "炫彩 Bento", "非對稱式 Bento Box 幾何佈局，主次分明色彩豐富"),
         _buildOption("aurora", "極光毛玻璃", "流體極光與全域毛玻璃，呈現立體折射視差"),
+        _buildOption("liquid_glass", "流體玻璃導覽", "採用流體玻璃底導覽列，整合四大分類與選單，極致優雅"),
       ];
     }
+
+    // liquid glass 模式：半透明白底 + 細白邊框（玻璃質感）
+    final Color bgColor = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.white.withValues(alpha: 0.40))
+        : colorScheme.cardBackground;
+
+    final Border borderDecoration = isLiquidGlass
+        ? Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.50),
+            width: 1.0,
+          )
+        : Border.all(color: colorScheme.borderColor, width: 0.5);
+
+    final Color dividerColor = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.30))
+        : colorScheme.borderColor;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
+        color: bgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.borderColor, width: 0.5),
+        border: borderDecoration,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: isLiquidGlass ? 0.06 : 0.02),
+            blurRadius: isLiquidGlass ? 16 : 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -927,7 +1024,7 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
             height: 1,
             indent: 68,
             endIndent: 16,
-            color: colorScheme.borderColor,
+            color: dividerColor,
           ),
           itemBuilder: (context, index) => options[index],
         ),
@@ -935,7 +1032,7 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
     );
   }
 
-  Widget _buildPerformanceTip() {
+  Widget _buildPerformanceTip({bool isLiquidGlass = false}) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -949,22 +1046,47 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
         : Icons.offline_bolt_rounded;
     final iconColor = isPremium ? Colors.amber : Colors.green;
 
+    // liquid glass 模式：半透明白底玻璃質感
+    final Color bgColor = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.white.withValues(alpha: 0.35))
+        : (isDark ? colorScheme.secondaryCardBackground : Colors.grey.shade50);
+
+    final Border borderDecoration = isLiquidGlass
+        ? Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.40),
+            width: 1.0,
+          )
+        : Border.all(color: colorScheme.borderColor, width: 0.5);
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark
-            ? colorScheme.secondaryCardBackground
-            : Colors.grey.shade50,
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.borderColor, width: 0.5),
+        border: borderDecoration,
+        boxShadow: isLiquidGlass
+            ? [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.12)
+                      : Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
-            color: isDark ? iconColor.withOpacity(0.9) : iconColor.shade700,
+            color: isDark ? iconColor.withValues(alpha: 0.9) : iconColor.shade700,
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -1001,19 +1123,26 @@ class _HomeLayoutSettingsPageState extends State<HomeLayoutSettingsPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: widget.isEmbedded
-          ? null
-          : AppBar(title: const Text("主頁面外觀設定"), centerTitle: true),
-      backgroundColor: colorScheme.pageBackground,
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        children: [
-          _buildCategorySelector(),
-          _buildOptionsList(),
-          _buildPerformanceTip(),
-        ],
-      ),
+    return ValueListenableBuilder<String>(
+      valueListenable: LayoutStyleNotifier.instance,
+      builder: (context, layoutStyle, _) {
+        final isLiquidGlass = layoutStyle == kLiquidGlassLayoutStyle;
+        return GlassPageScaffold(
+          appBar: widget.isEmbedded
+              ? null
+              : AppBar(title: const Text("主頁面外觀設定"), centerTitle: true),
+          backgroundColor: colorScheme.pageBackground,
+          body: ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(bottom: isLiquidGlass ? 100 : 0),
+            children: [
+              _buildCategorySelector(isLiquidGlass: isLiquidGlass),
+              _buildOptionsList(isLiquidGlass: isLiquidGlass),
+              _buildPerformanceTip(isLiquidGlass: isLiquidGlass),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1113,12 +1242,15 @@ class _OrientationSettingsPageState extends State<OrientationSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: widget.isEmbedded
           ? null
           : AppBar(title: const Text("螢幕方向設定"), centerTitle: true),
       backgroundColor: colorScheme.pageBackground,
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+        ),
         children: [
           ListTile(
             title: Text(

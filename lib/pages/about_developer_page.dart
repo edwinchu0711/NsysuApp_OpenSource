@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
 
 class AboutDeveloperPage extends StatelessWidget {
   const AboutDeveloperPage({Key? key}) : super(key: key);
@@ -18,23 +21,29 @@ class AboutDeveloperPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isWide = MediaQuery.of(context).size.width >= 800;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     if (isWide) {
-      return Scaffold(
-        backgroundColor: colorScheme.pageBackground,
+      return GlassPageScaffold(
         appBar: AppBar(
           title: const Text(
             "關於開發者",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
-          backgroundColor: colorScheme.cardBackground,
+          backgroundColor:
+              isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
           foregroundColor: colorScheme.primaryText,
           elevation: 0,
           iconTheme: IconThemeData(color: colorScheme.primaryText),
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+          padding: EdgeInsets.fromLTRB(
+            40.0,
+            24.0,
+            40.0,
+            LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 24.0,
+          ),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
@@ -77,21 +86,26 @@ class AboutDeveloperPage extends StatelessWidget {
     }
 
     // Mobile layout: EXACTLY as original
-    return Scaffold(
-      backgroundColor: colorScheme.pageBackground,
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text(
           "關於開發者",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor:
+            isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
         foregroundColor: colorScheme.primaryText,
         elevation: 0,
         iconTheme: IconThemeData(color: colorScheme.primaryText),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+        padding: EdgeInsets.fromLTRB(
+          20.0,
+          16.0,
+          20.0,
+          LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 16.0,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -122,20 +136,23 @@ class AboutDeveloperPage extends StatelessWidget {
 
   Widget _buildDeveloperCard(BuildContext context, ColorScheme colorScheme) {
     final isDark = colorScheme.brightness == Brightness.dark;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 24)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colorScheme.borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  spreadRadius: 1,
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Column(
@@ -169,7 +186,7 @@ class AboutDeveloperPage extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withValues(alpha: 0.08),
                             blurRadius: 8,
                             spreadRadius: 2,
                             offset: const Offset(0, 2),
@@ -178,7 +195,7 @@ class AboutDeveloperPage extends StatelessWidget {
                       ),
                       child: CircleAvatar(
                         radius: 36,
-                        backgroundColor: colorScheme.accentBlue.withOpacity(
+                        backgroundColor: colorScheme.accentBlue.withValues(alpha: 
                           0.12,
                         ),
                         child: Icon(
@@ -190,7 +207,7 @@ class AboutDeveloperPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "Steven",
+                      "Danial",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -211,7 +228,7 @@ class AboutDeveloperPage extends StatelessWidget {
                         color: colorScheme.secondaryCardBackground,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: colorScheme.borderColor.withOpacity(0.5),
+                          color: colorScheme.borderColor.withValues(alpha: 0.5),
                           width: 0.5,
                         ),
                       ),
@@ -225,6 +242,29 @@ class AboutDeveloperPage extends StatelessWidget {
                               color: colorScheme.bodyText,
                               height: 1.5,
                               fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Divider(
+                            color: colorScheme.borderColor.withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "如有問題或版權疑慮，歡迎來信詢問：",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.subtitleText,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            "nsysu.review.prude496@slmails.com",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colorScheme.accentBlue,
+                              fontWeight: FontWeight.bold,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -247,19 +287,21 @@ class AboutDeveloperPage extends StatelessWidget {
   ) {
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: LayoutStyleNotifier.instance.isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 20)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorScheme.borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -316,7 +358,8 @@ class AboutDeveloperPage extends StatelessWidget {
             context,
             colorScheme,
             title: "Sunny Fan",
-            subtitle: "特別感謝他長期擔任本專案的專屬測試員，無論大小 Bug 均在第一時間詳盡回報，協助系統穩定度把關，更給予了開發者無比的溫暖與前行動力。",
+            subtitle:
+                "特別感謝他長期擔任本專案的專屬測試員，無論大小 Bug 均在第一時間詳盡回報，協助系統穩定度把關，更給予了開發者無比的溫暖與前行動力。",
             icon: Icons.person_outline_rounded,
           ),
         ],
@@ -337,7 +380,7 @@ class AboutDeveloperPage extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: colorScheme.accentBlue.withOpacity(0.08),
+            color: colorScheme.accentBlue.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 22, color: colorScheme.accentBlue),
@@ -375,19 +418,21 @@ class AboutDeveloperPage extends StatelessWidget {
   Widget _buildCreditsCard(BuildContext context, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: LayoutStyleNotifier.instance.isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 20)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorScheme.borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -415,7 +460,7 @@ class AboutDeveloperPage extends StatelessWidget {
             "• Icon 'ic_school' designed by lutfix from Flaticon",
             style: TextStyle(
               fontSize: 13,
-              color: colorScheme.bodyText.withOpacity(0.9),
+              color: colorScheme.bodyText.withValues(alpha: 0.9),
               height: 1.5,
             ),
           ),
@@ -427,19 +472,21 @@ class AboutDeveloperPage extends StatelessWidget {
   Widget _buildLicenseCard(BuildContext context, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.borderColor, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: LayoutStyleNotifier.instance.isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 20)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorScheme.borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -489,7 +536,7 @@ class AboutDeveloperPage extends StatelessWidget {
               "SOFTWARE.",
               style: TextStyle(
                 fontSize: 12,
-                color: colorScheme.bodyText.withOpacity(0.9),
+                color: colorScheme.bodyText.withValues(alpha: 0.9),
                 height: 1.55,
               ),
             ),
@@ -500,6 +547,8 @@ class AboutDeveloperPage extends StatelessWidget {
   }
 
   Widget _buildGitHubButton(BuildContext context, ColorScheme colorScheme) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return ElevatedButton.icon(
       onPressed: _launchGitHubUrl,
       icon: const Icon(Icons.launch_rounded, size: 18),
@@ -508,8 +557,19 @@ class AboutDeveloperPage extends StatelessWidget {
         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: colorScheme.accentBlue,
-        foregroundColor: Colors.white,
+        backgroundColor: isLiquidGlass
+            ? (isDark
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.white.withValues(alpha: 0.5))
+            : colorScheme.accentBlue,
+        foregroundColor: isLiquidGlass ? colorScheme.primaryText : Colors.white,
+        side: isLiquidGlass
+            ? BorderSide(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.white.withValues(alpha: 0.4),
+              )
+            : null,
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,

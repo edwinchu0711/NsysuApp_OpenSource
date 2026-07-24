@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/utils.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class LoginPasswordErrorException implements Exception {
   final String message;
@@ -20,7 +21,7 @@ class ScoreSessionService {
 
   ScoreSessionService._internal();
 
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   String? _cachedCookie;
   DateTime? _cookieTime;

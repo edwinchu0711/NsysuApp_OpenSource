@@ -7,8 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http; // ✅ 新增：用來發送課綱請求
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
 import 'package:flutter/services.dart';
-import '../../widgets/glass_dropdown.dart';
+import '../../widgets/glass/glass_dropdown.dart';
+import '../../widgets/glass/glass_card.dart';
+import '../../widgets/glass/glass_dialog.dart';
+import '../../services/http_client_factory.dart';
 
 class CourseQueryTab extends StatefulWidget {
   final List<CourseSelectionData> currentCourses; // 從父層傳入目前的課表，用來比對重複
@@ -36,7 +40,13 @@ class _CourseQueryTabState extends State<CourseQueryTab>
   bool _isQueryLoading = false;
   List<CourseJsonData> _searchResults = [];
   bool _hasSearched = false;
-  bool _showEditListMode = false;
+  bool get _showEditListMode => _showEditListModeVal;
+  bool _showEditListModeVal = false;
+  set _showEditListMode(bool val) {
+    _showEditListModeVal = val;
+    LayoutStyleNotifier.hideNavBarNotifier.value = val;
+  }
+
   bool _showInlineSearchPanel = false;
   final GlobalKey _inlineSearchPanelKey = GlobalKey();
 
@@ -119,6 +129,9 @@ class _CourseQueryTabState extends State<CourseQueryTab>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      LayoutStyleNotifier.hideNavBarNotifier.value = false;
+    });
     _crsNameCtrl.dispose();
     _teacherCtrl.dispose();
     _codeCtrl.dispose();
@@ -133,6 +146,8 @@ class _CourseQueryTabState extends State<CourseQueryTab>
     // ✅ 每次畫面重建或切回時，順便檢查有沒有包裹(匯出資料)要領收
     _checkExportedCourses();
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     final isWide = MediaQuery.of(context).size.width >= 800;
     final isKeyboardActive = MediaQuery.of(context).viewInsets.bottom > 0;
 
@@ -183,12 +198,36 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isSearchActive
-                              ? colorScheme.primaryContainer
-                              : colorScheme.subtleBackground,
+                              ? (isLiquidGlass
+                                    ? colorScheme.primary.withValues(
+                                        alpha: isDark ? 0.22 : 0.14,
+                                      )
+                                    : colorScheme.primaryContainer)
+                              : (isLiquidGlass
+                                    ? (isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.white.withValues(alpha: 0.4))
+                                    : colorScheme.subtleBackground),
                           foregroundColor: isSearchActive
                               ? colorScheme.primary
                               : colorScheme.subtitleText,
                           elevation: 0,
+                          side: isLiquidGlass
+                              ? BorderSide(
+                                  color: isSearchActive
+                                      ? colorScheme.primary.withValues(
+                                          alpha: 0.4,
+                                        )
+                                      : (isDark
+                                            ? Colors.white.withValues(
+                                                alpha: 0.12,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.08,
+                                              )),
+                                  width: 1.0,
+                                )
+                              : null,
                           padding: iconOnly
                               ? const EdgeInsets.symmetric(
                                   horizontal: 0,
@@ -230,12 +269,36 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _showImportMode
-                              ? colorScheme.primaryContainer
-                              : colorScheme.subtleBackground,
+                              ? (isLiquidGlass
+                                    ? colorScheme.primary.withValues(
+                                        alpha: isDark ? 0.22 : 0.14,
+                                      )
+                                    : colorScheme.primaryContainer)
+                              : (isLiquidGlass
+                                    ? (isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.white.withValues(alpha: 0.4))
+                                    : colorScheme.subtleBackground),
                           foregroundColor: _showImportMode
                               ? colorScheme.primary
                               : colorScheme.subtitleText,
                           elevation: 0,
+                          side: isLiquidGlass
+                              ? BorderSide(
+                                  color: _showImportMode
+                                      ? colorScheme.primary.withValues(
+                                          alpha: 0.4,
+                                        )
+                                      : (isDark
+                                            ? Colors.white.withValues(
+                                                alpha: 0.12,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.08,
+                                              )),
+                                  width: 1.0,
+                                )
+                              : null,
                           padding: iconOnly
                               ? const EdgeInsets.symmetric(
                                   horizontal: 0,
@@ -277,12 +340,22 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _showEditListMode
-                              ? colorScheme.warningContainer
-                              : colorScheme.subtleBackground,
+                              ? (isLiquidGlass
+                                    ? Colors.orange.withValues(
+                                        alpha: isDark ? 0.22 : 0.14,
+                                      )
+                                    : colorScheme.warningContainer)
+                              : (isLiquidGlass
+                                    ? (isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.white.withValues(alpha: 0.4))
+                                    : colorScheme.subtleBackground),
                           foregroundColor: _showEditListMode
-                              ? (colorScheme.isDark
-                                    ? const Color(0xFFFFB74D)
-                                    : Colors.orange[800])
+                              ? (isLiquidGlass
+                                    ? Colors.orange
+                                    : (colorScheme.isDark
+                                          ? const Color(0xFFFFB74D)
+                                          : Colors.orange[800]))
                               : colorScheme.subtitleText,
                           elevation: 0,
                           padding: iconOnly
@@ -294,14 +367,31 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                                   horizontal: 4,
                                   vertical: 12,
                                 ),
-                          side: _pendingItems.isNotEmpty
+                          side: isLiquidGlass
                               ? BorderSide(
-                                  color: colorScheme.isDark
-                                      ? const Color(0xFFFFB74D)
-                                      : Colors.orange,
+                                  color: _showEditListMode
+                                      ? Colors.orange.withValues(alpha: 0.4)
+                                      : (_pendingItems.isNotEmpty
+                                            ? (isDark
+                                                  ? const Color(0xFFFFB74D)
+                                                  : Colors.orange)
+                                            : (isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.12,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.08,
+                                                    ))),
                                   width: 1,
                                 )
-                              : null,
+                              : (_pendingItems.isNotEmpty
+                                    ? BorderSide(
+                                        color: colorScheme.isDark
+                                            ? const Color(0xFFFFB74D)
+                                            : Colors.orange,
+                                        width: 1,
+                                      )
+                                    : null),
                         ),
                         child: iconOnly
                             ? Badge(
@@ -366,6 +456,241 @@ class _CourseQueryTabState extends State<CourseQueryTab>
   // --- 實作行內查詢面板 ---
   Widget _buildInlineSearchPanel() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final Widget panelContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "課程查詢條件",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: colorScheme.primaryText,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showInlineSearchPanel = false;
+                });
+              },
+              child: Icon(
+                Icons.close,
+                size: 18,
+                color: colorScheme.subtitleText,
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _isSemesterLoading
+                  ? const Center(
+                      child: SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : _buildDropdown(
+                      label: "學期",
+                      value: _selectedSemester ?? "",
+                      items: _semesterOptions,
+                      displayMap: _semesterDisplayMap,
+                      onChanged: (v) => setState(() => _selectedSemester = v),
+                    ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _buildTextField("課程名稱", _crsNameCtrl)),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        Row(
+          children: [
+            Expanded(child: _buildTextField("授課教師", _teacherCtrl)),
+            const SizedBox(width: 8),
+            Expanded(child: _buildTextField("開課系所", _deptCtrl, hint: "例如: 資工")),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // 3. 年級 & 班級
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                label: "年級",
+                value: _selectedGrade ?? "",
+                items: const ["", "1", "2", "3", "4", "5"],
+                displayMap: const {
+                  "": "全部",
+                  "1": "一年級",
+                  "2": "二年級",
+                  "3": "三年級",
+                  "4": "四年級",
+                  "5": "五年級",
+                },
+                onChanged: (v) => setState(
+                  () => _selectedGrade = (v == null || v.isEmpty) ? null : v,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown(
+                label: "班級",
+                value: _selectedClass ?? "",
+                items: const ["", "0", "1", "2", "5"],
+                displayMap: const {
+                  "": "全部",
+                  "0": "不分班",
+                  "1": "甲班",
+                  "2": "乙班",
+                  "5": "全英班",
+                },
+                onChanged: (v) => setState(
+                  () => _selectedClass = (v == null || v.isEmpty) ? null : v,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // 4. 星期 & 節次
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                label: "星期",
+                value: _selectedDay ?? "",
+                items: const ["", "1", "2", "3", "4", "5", "6", "7"],
+                displayMap: const {
+                  "": "不限",
+                  "1": "星期一",
+                  "2": "星期二",
+                  "3": "星期三",
+                  "4": "星期四",
+                  "5": "星期五",
+                  "6": "星期六",
+                  "7": "星期日",
+                },
+                onChanged: (v) => setState(
+                  () => _selectedDay = (v == null || v.isEmpty) ? null : v,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown(
+                label: "節次",
+                value: _selectedPeriod ?? "",
+                items: const [
+                  "",
+                  "A",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "B",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "C",
+                ],
+                displayMap: const {
+                  "": "不限",
+                  "A": "A (07:00)",
+                  "1": "1 (08:10)",
+                  "2": "2 (09:10)",
+                  "3": "3 (10:10)",
+                  "4": "4 (11:10)",
+                  "B": "B (12:10)",
+                  "5": "5 (13:10)",
+                  "6": "6 (14:10)",
+                  "7": "7 (15:10)",
+                  "8": "8 (16:10)",
+                  "9": "9 (17:10)",
+                  "C": "C (18:20)",
+                },
+                onChanged: (v) => setState(
+                  () => _selectedPeriod = (v == null || v.isEmpty) ? null : v,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 5. 按鈕列
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () {
+                _crsNameCtrl.clear();
+                _teacherCtrl.clear();
+                _codeCtrl.clear();
+                _deptCtrl.clear();
+                setState(() {
+                  _selectedGrade = null;
+                  _selectedClass = null;
+                  _selectedDay = null;
+                  _selectedPeriod = null;
+                });
+              },
+              child: Text(
+                "重設",
+                style: TextStyle(color: colorScheme.subtitleText, fontSize: 12),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _showInlineSearchPanel = false;
+                });
+                _performSearch();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                minimumSize: const Size(60, 32),
+              ),
+              child: const Text(
+                "開始查詢",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (isLiquidGlass) {
+      return Container(
+        key: _inlineSearchPanelKey,
+        margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        decoration: glassCardDecoration(context, borderRadius: 12),
+        padding: const EdgeInsets.all(12),
+        child: panelContent,
+      );
+    }
+
     return Container(
       key: _inlineSearchPanelKey,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -378,246 +703,20 @@ class _CourseQueryTabState extends State<CourseQueryTab>
           BoxShadow(
             color: colorScheme.isDark
                 ? Colors.black12
-                : Colors.grey.withOpacity(0.05),
+                : Colors.grey.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "課程查詢條件",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: colorScheme.primaryText,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _showInlineSearchPanel = false;
-                  });
-                },
-                child: Icon(
-                  Icons.close,
-                  size: 18,
-                  color: colorScheme.subtitleText,
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _isSemesterLoading
-                    ? const Center(
-                        child: SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : _buildDropdown(
-                        label: "學期",
-                        value: _selectedSemester ?? "",
-                        items: _semesterOptions,
-                        displayMap: _semesterDisplayMap,
-                        onChanged: (v) => setState(() => _selectedSemester = v),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: _buildTextField("課程名稱", _crsNameCtrl)),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              Expanded(child: _buildTextField("授課教師", _teacherCtrl)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildTextField("開課系所", _deptCtrl, hint: "例如: 資工"),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // 3. 年級 & 班級
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
-                  label: "年級",
-                  value: _selectedGrade ?? "",
-                  items: const ["", "1", "2", "3", "4", "5"],
-                  displayMap: const {
-                    "": "全部",
-                    "1": "一年級",
-                    "2": "二年級",
-                    "3": "三年級",
-                    "4": "四年級",
-                    "5": "五年級",
-                  },
-                  onChanged: (v) => setState(
-                    () => _selectedGrade = (v == null || v.isEmpty) ? null : v,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildDropdown(
-                  label: "班級",
-                  value: _selectedClass ?? "",
-                  items: const ["", "0", "1", "2", "5"],
-                  displayMap: const {
-                    "": "全部",
-                    "0": "不分班",
-                    "1": "甲班",
-                    "2": "乙班",
-                    "5": "全英班",
-                  },
-                  onChanged: (v) => setState(
-                    () => _selectedClass = (v == null || v.isEmpty) ? null : v,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // 4. 星期 & 節次
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
-                  label: "星期",
-                  value: _selectedDay ?? "",
-                  items: const ["", "1", "2", "3", "4", "5", "6", "7"],
-                  displayMap: const {
-                    "": "不限",
-                    "1": "星期一",
-                    "2": "星期二",
-                    "3": "星期三",
-                    "4": "星期四",
-                    "5": "星期五",
-                    "6": "星期六",
-                    "7": "星期日",
-                  },
-                  onChanged: (v) => setState(
-                    () => _selectedDay = (v == null || v.isEmpty) ? null : v,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildDropdown(
-                  label: "節次",
-                  value: _selectedPeriod ?? "",
-                  items: const [
-                    "",
-                    "A",
-                    "1",
-                    "2",
-                    "3",
-                    "4",
-                    "B",
-                    "5",
-                    "6",
-                    "7",
-                    "8",
-                    "9",
-                    "C",
-                  ],
-                  displayMap: const {
-                    "": "不限",
-                    "A": "A (07:00)",
-                    "1": "1 (08:10)",
-                    "2": "2 (09:10)",
-                    "3": "3 (10:10)",
-                    "4": "4 (11:10)",
-                    "B": "B (12:10)",
-                    "5": "5 (13:10)",
-                    "6": "6 (14:10)",
-                    "7": "7 (15:10)",
-                    "8": "8 (16:10)",
-                    "9": "9 (17:10)",
-                    "C": "C (18:20)",
-                  },
-                  onChanged: (v) => setState(
-                    () => _selectedPeriod = (v == null || v.isEmpty) ? null : v,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // 5. 按鈕列
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () {
-                  _crsNameCtrl.clear();
-                  _teacherCtrl.clear();
-                  _codeCtrl.clear();
-                  _deptCtrl.clear();
-                  setState(() {
-                    _selectedGrade = null;
-                    _selectedClass = null;
-                    _selectedDay = null;
-                    _selectedPeriod = null;
-                  });
-                },
-                child: Text(
-                  "重設",
-                  style: TextStyle(
-                    color: colorScheme.subtitleText,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _showInlineSearchPanel = false;
-                  });
-                  _performSearch();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  minimumSize: const Size(60, 32),
-                ),
-                child: const Text(
-                  "開始查詢",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: panelContent,
     );
   }
 
   // --- 搜尋結果 (支援緊湊模式與 12px 側邊距對齊) ---
   Widget _buildSearchResults() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     if (_isQueryLoading)
       return const Center(child: CircularProgressIndicator());
     if (!_hasSearched) {
@@ -631,7 +730,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
     if (_searchResults.isEmpty) return const Center(child: Text("找不到符合條件的課程"));
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: EdgeInsets.fromLTRB(12, 0, 12, isLiquidGlass ? 100 : 12),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         final course = _searchResults[index];
@@ -641,267 +740,368 @@ class _CourseQueryTabState extends State<CourseQueryTab>
             _pendingItems.any((p) => p.id == course.id) ||
             _isCourseAlreadySelected(course.id);
 
-        return Card(
-          elevation: 2,
-          margin: EdgeInsets.only(bottom: widget.isCompact ? 8 : 12),
-          clipBehavior: Clip.antiAlias, // 讓展開動畫更滑順
-          child: Theme(
-            // 消除 ExpansionTile 上下預設的邊框線
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: widget.isCompact
-                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 4)
-                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              // 標題：課名
-              title: Text(
-                course.name.split('\n')[0],
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: widget.isCompact ? 14 : 16,
-                  color: colorScheme.primaryText,
-                ),
+        final Widget tileChild = Theme(
+          // 消除 ExpansionTile 上下預設的邊框線
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: widget.isCompact
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 4)
+                : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            // 標題：課名
+            title: Text(
+              course.name.split('\n')[0],
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: widget.isCompact ? 14 : 16,
+                color: colorScheme.primaryText,
               ),
-              // 副標題：老師 / 代號
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.person,
-                        size: widget.isCompact ? 12 : 14,
-                        color: colorScheme.subtitleText,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
+            ),
+            // 副標題：老師 / 代號
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person,
+                          size: widget.isCompact ? 12 : 14,
+                          color: colorScheme.subtitleText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
                           course.teacher,
                           style: TextStyle(
                             color: colorScheme.bodyText,
                             fontSize: widget.isCompact ? 12 : 13,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      SizedBox(width: widget.isCompact ? 8 : 12),
-                      Container(
-                        padding: widget.isCompact
-                            ? const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
-                              )
-                            : const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryCardBackground,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          course.id,
-                          style: TextStyle(
-                            fontSize: widget.isCompact ? 11 : 12,
-                            color: colorScheme.subtitleText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              // 右側按鈕：加選 (獨立運作，不會觸發展開)
-              trailing: isAdded
-                  ? Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: widget.isCompact ? 28 : 32,
-                    )
-                  : ElevatedButton(
-                      onPressed: () => _addToPendingList(course),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: widget.isCompact
-                            ? const EdgeInsets.symmetric(horizontal: 8)
-                            : const EdgeInsets.symmetric(horizontal: 12),
-                        minimumSize: widget.isCompact
-                            ? const Size(50, 28)
-                            : const Size(60, 32),
+                      ],
+                    ),
+                    Container(
+                      padding: widget.isCompact
+                          ? const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            )
+                          : const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryCardBackground,
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        "加選",
-                        style: TextStyle(fontSize: widget.isCompact ? 12 : 14),
+                        course.id,
+                        style: TextStyle(
+                          fontSize: widget.isCompact ? 11 : 12,
+                          color: colorScheme.subtitleText,
+                        ),
                       ),
                     ),
-
-              // --- 展開後的詳細內容 ---
-              children: [
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: colorScheme.borderColor,
-                ),
-                Container(
-                  color: colorScheme.isDark
-                      ? colorScheme.secondaryCardBackground
-                      : Colors.blue[50]!.withOpacity(0.3), // 微微的背景色區分
-                  padding: widget.isCompact
-                      ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-                      : const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                  child: Column(
-                    children: [
-                      // 第一排資訊
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.school,
-                              "系所",
-                              course.department,
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.grade,
-                              "學分",
-                              course.credit,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: widget.isCompact ? 8 : 12),
-                      // 第二排資訊
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.class_,
-                              "班級",
-                              "${course.grade}年級 ${course.className}",
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.room,
-                              "教室",
-                              _parseRoomLocation(course.room),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: widget.isCompact ? 12 : 16),
-                      // 時間表顯示
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "上課時間表",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.subtitleText,
-                            fontSize: widget.isCompact ? 12 : 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildTimeDisplay(course.classTime),
-
-                      // ✅ 評分方式區塊
-                      SizedBox(height: widget.isCompact ? 12 : 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "評分方式",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.subtitleText,
-                            fontSize: widget.isCompact ? 12 : 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // 使用 FutureBuilder 動態載入
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: FutureBuilder<List<String>>(
-                          future: _getCourseEvaluation(course.id),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              );
-                            }
-                            if (snapshot.hasError ||
-                                !snapshot.hasData ||
-                                snapshot.data!.isEmpty) {
-                              return Text(
-                                "無法取得評分資料",
-                                style: TextStyle(
-                                  color: colorScheme.subtitleText,
-                                  fontSize: 13,
-                                ),
-                              );
-                            }
-                            // 渲染抓取到的評分清單
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: snapshot.data!
-                                  .map(
-                                    (e) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 6.0,
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              e,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: colorScheme.primaryText,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                    _buildProbabilityChip(course, colorScheme),
+                  ],
                 ),
               ],
             ),
+            // 右側按鈕：加選 (獨立運作，不會觸發展開)
+            trailing: isAdded
+                ? Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: widget.isCompact ? 28 : 32,
+                  )
+                : ElevatedButton(
+                    onPressed: () => _addToPendingList(course),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: widget.isCompact
+                          ? const EdgeInsets.symmetric(horizontal: 8)
+                          : const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: widget.isCompact
+                          ? const Size(50, 28)
+                          : const Size(60, 32),
+                    ),
+                    child: Text(
+                      "加選",
+                      style: TextStyle(fontSize: widget.isCompact ? 12 : 14),
+                    ),
+                  ),
+
+            // --- 展開後的詳細內容 ---
+            children: [
+              Divider(height: 1, thickness: 1, color: colorScheme.borderColor),
+              Container(
+                color: isLiquidGlass
+                    ? (colorScheme.isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.white.withValues(alpha: 0.35))
+                    : (colorScheme.isDark
+                          ? colorScheme.secondaryCardBackground
+                          : Colors.blue[50]!.withValues(alpha: 0.3)), // 微微的背景色區分
+                padding: widget.isCompact
+                    ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                    : const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  children: [
+                    // 第一排資訊
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.school,
+                            "系所",
+                            course.department,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.grade,
+                            "學分",
+                            course.credit,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: widget.isCompact ? 8 : 12),
+                    // 第二排資訊
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.class_,
+                            "班級",
+                            "${course.grade}年級 ${course.className}",
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.room,
+                            "教室",
+                            _parseRoomLocation(course.room),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: widget.isCompact ? 8 : 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.people,
+                            "名額 / 已選 / 餘額",
+                            "${course.restrict} / ${course.select} / ${course.remaining}",
+                            valueColor: course.remaining > 0
+                                ? (colorScheme.isDark
+                                      ? Colors.green[300]
+                                      : Colors.green[700])
+                                : Colors.redAccent,
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDetailRow(
+                            Icons.pie_chart,
+                            "選上機率",
+                            _calculateProbability(course),
+                            valueColor: colorScheme.isDark
+                                ? Colors.orange[300]
+                                : Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: widget.isCompact ? 12 : 16),
+                    // 時間表顯示
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "上課時間表",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.subtitleText,
+                          fontSize: widget.isCompact ? 12 : 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildTimeDisplay(course.classTime),
+
+                    // ✅ 評分方式區塊
+                    SizedBox(height: widget.isCompact ? 12 : 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "評分方式",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.subtitleText,
+                          fontSize: widget.isCompact ? 12 : 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // 使用 FutureBuilder 動態載入
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FutureBuilder<List<String>>(
+                        future: _getCourseEvaluation(course.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          }
+                          if (snapshot.hasError ||
+                              !snapshot.hasData ||
+                              snapshot.data!.isEmpty) {
+                            return Text(
+                              "無法取得評分資料",
+                              style: TextStyle(
+                                color: colorScheme.subtitleText,
+                                fontSize: 13,
+                              ),
+                            );
+                          }
+                          // 渲染抓取到的評分清單
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: snapshot.data!
+                                .map(
+                                  (e) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6.0),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            e,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: colorScheme.primaryText,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+        );
+
+        if (isLiquidGlass) {
+          return Container(
+            margin: EdgeInsets.only(bottom: widget.isCompact ? 8 : 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: glassCardDecoration(context, borderRadius: 8),
+            child: tileChild,
+          );
+        }
+
+        return Card(
+          elevation: 2,
+          margin: EdgeInsets.only(bottom: widget.isCompact ? 8 : 12),
+          clipBehavior: Clip.antiAlias, // 讓展開動畫更滑順
+          child: tileChild,
         );
       },
     );
   }
 
+  String _calculateProbability(CourseJsonData course) {
+    if (course.remaining <= 0) return "0% (已滿)";
+    double prob = course.remaining / course.select;
+    if (course.select <= 0 || prob > 1) return "100%";
+    return "${(prob * 100).toStringAsFixed(1)}%";
+  }
+
+  Widget _buildProbabilityChip(CourseJsonData course, ColorScheme colorScheme) {
+    double prob = 1.0;
+    if (course.remaining <= 0) {
+      prob = 0.0;
+    } else if (course.select > 0) {
+      prob = course.remaining / course.select;
+      if (prob > 1.0) prob = 1.0;
+    }
+
+    final isDark = colorScheme.isDark;
+    Color backgroundColor;
+    Color textColor;
+
+    if (prob >= 0.7) {
+      backgroundColor = isDark
+          ? Colors.green[900]!.withValues(alpha: 0.3)
+          : Colors.green[50]!;
+      textColor = isDark ? Colors.green[200]! : Colors.green[800]!;
+    } else if (prob >= 0.3) {
+      backgroundColor = isDark
+          ? Colors.orange[900]!.withValues(alpha: 0.3)
+          : Colors.orange[50]!;
+      textColor = isDark ? Colors.orange[200]! : Colors.orange[800]!;
+    } else {
+      backgroundColor = isDark
+          ? Colors.red[900]!.withValues(alpha: 0.3)
+          : Colors.red[50]!;
+      textColor = isDark ? Colors.red[200]! : Colors.red[800]!;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "機率: ${_calculateProbability(course)}",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- 輔劇方法 1: 顯示詳細資訊的小列 ---
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Widget _buildDetailRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,7 +1121,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: colorScheme.primaryText,
+                  color: valueColor ?? colorScheme.primaryText,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -992,6 +1192,8 @@ class _CourseQueryTabState extends State<CourseQueryTab>
   // --- 編輯清單 (購物車) ---
   Widget _buildEditListMode() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     // 扣除掉「待退選」的，計算目前還在系統上的課程
     final activeExistingCourses = widget.currentCourses.where((c) {
       // 1. 如果已經在「待退選」清單中，就不顯示在已選列表
@@ -1016,7 +1218,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: EdgeInsets.fromLTRB(12, 0, 12, isLiquidGlass ? 100 : 12),
             children: [
               // 1. 待送出清單
               if (_pendingItems.isNotEmpty) ...[
@@ -1043,259 +1245,268 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                       : const Color(0xFFEF5350);
                   String tagText = isAdd ? "加選" : "退選";
 
-                  return Card(
-                    color: colorScheme.cardBackground,
-                    elevation: 1,
-                    margin: EdgeInsets.only(bottom: widget.isCompact ? 8 : 10),
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: colorScheme.borderColor,
-                        width: 1,
-                      ),
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 左側漸層色條
-                          Container(
-                            width: 6,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [lightColor, mainColor],
-                              ),
+                  final Widget cardChild = IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 左側漸層色條
+                        Container(
+                          width: 6,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [lightColor, mainColor],
                             ),
                           ),
-                          // 主體
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                widget.isCompact ? 10 : 14,
-                                widget.isCompact ? 9 : 11,
-                                widget.isCompact ? 4 : 6,
-                                widget.isCompact ? 9 : 11,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      // 課名 + 標籤 + 課號
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              item.name,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: widget.isCompact
-                                                    ? 14
-                                                    : 15,
-                                                fontWeight: FontWeight.bold,
-                                                color: colorScheme.primaryText,
-                                              ),
+                        ),
+                        // 主體
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              widget.isCompact ? 10 : 14,
+                              widget.isCompact ? 9 : 11,
+                              widget.isCompact ? 4 : 6,
+                              widget.isCompact ? 9 : 11,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // 課名 + 標籤 + 課號
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            item.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: widget.isCompact
+                                                  ? 14
+                                                  : 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: colorScheme.primaryText,
                                             ),
-                                            const SizedBox(height: 3),
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: widget.isCompact
-                                                        ? 6
-                                                        : 7,
-                                                    vertical: 1.5,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: mainColor,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    tagText,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: widget.isCompact
+                                                      ? 6
+                                                      : 7,
+                                                  vertical: 1.5,
                                                 ),
-                                                const SizedBox(width: 6),
-                                                Flexible(
-                                                  child: Text(
-                                                    item.id,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      fontSize: 11.5,
-                                                      color: colorScheme
-                                                          .subtitleText,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      // 志願輸入 (僅加選)
-                                      if (isAdd &&
-                                          item.pointsController != null) ...[
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.center,
-                                          children: [
-                                            SizedBox(
-                                              width: widget.isCompact ? 48 : 54,
-                                              height: widget.isCompact
-                                                  ? 26
-                                                  : 28,
-                                              child: TextField(
-                                                controller:
-                                                    item.pointsController,
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                textAlign: TextAlign.center,
-                                                textAlignVertical:
-                                                    TextAlignVertical.center,
-                                                style: TextStyle(
-                                                  fontSize: widget.isCompact
-                                                      ? 12
-                                                      : 13,
-                                                  fontWeight: FontWeight.bold,
+                                                decoration: BoxDecoration(
                                                   color: mainColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
                                                 ),
-                                                decoration: InputDecoration(
-                                                  isCollapsed: true,
-                                                  contentPadding:
-                                                      EdgeInsets.symmetric(
-                                                        vertical:
-                                                            widget.isCompact
-                                                            ? 5
-                                                            : 6,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                        borderSide: BorderSide(
-                                                          color: colorScheme
-                                                              .borderColor,
-                                                        ),
-                                                      ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                        borderSide: BorderSide(
-                                                          color: mainColor,
-                                                          width: 1.5,
-                                                        ),
-                                                      ),
-                                                  hintText: "0",
-                                                  hintStyle: TextStyle(
-                                                    fontSize: widget.isCompact
-                                                        ? 11
-                                                        : 12,
+                                                child: Text(
+                                                  tagText,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Flexible(
+                                                child: Text(
+                                                  item.id,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 11.5,
                                                     color: colorScheme
                                                         .subtitleText,
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              "志願/點數",
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: colorScheme.subtitleText,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  if (!isAdd)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                        top: widget.isCompact ? 6 : 8,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.warning_amber_rounded,
-                                            size: widget.isCompact ? 13 : 14,
-                                            color: colorScheme.isDark
-                                                ? Colors.red[300]
-                                                : Colors.red[700],
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            "此課程將被退選",
-                                            style: TextStyle(
-                                              color: colorScheme.isDark
-                                                  ? Colors.red[300]
-                                                  : Colors.red[700],
-                                              fontSize: widget.isCompact
-                                                  ? 11
-                                                  : 12,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                            ],
                                           ),
                                         ],
                                       ),
                                     ),
-                                ],
+                                    // 志願輸入 (僅加選)
+                                    if (isAdd &&
+                                        item.pointsController != null) ...[
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          SizedBox(
+                                            width: widget.isCompact ? 48 : 54,
+                                            height: widget.isCompact ? 26 : 28,
+                                            child: TextField(
+                                              controller: item.pointsController,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              textAlign: TextAlign.center,
+                                              textAlignVertical:
+                                                  TextAlignVertical.center,
+                                              style: TextStyle(
+                                                fontSize: widget.isCompact
+                                                    ? 12
+                                                    : 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: mainColor,
+                                              ),
+                                              decoration: InputDecoration(
+                                                isCollapsed: true,
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                      vertical: widget.isCompact
+                                                          ? 5
+                                                          : 6,
+                                                    ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color: colorScheme
+                                                            .borderColor,
+                                                      ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color: mainColor,
+                                                        width: 1.5,
+                                                      ),
+                                                    ),
+                                                hintText: "0",
+                                                hintStyle: TextStyle(
+                                                  fontSize: widget.isCompact
+                                                      ? 11
+                                                      : 12,
+                                                  color:
+                                                      colorScheme.subtitleText,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            "志願/點數",
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: colorScheme.subtitleText,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                if (!isAdd)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      top: widget.isCompact ? 6 : 8,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.warning_amber_rounded,
+                                          size: widget.isCompact ? 13 : 14,
+                                          color: colorScheme.isDark
+                                              ? Colors.red[300]
+                                              : Colors.red[700],
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "此課程將被退選",
+                                          style: TextStyle(
+                                            color: colorScheme.isDark
+                                                ? Colors.red[300]
+                                                : Colors.red[700],
+                                            fontSize: widget.isCompact
+                                                ? 11
+                                                : 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // 移除鈕
+                        Align(
+                          alignment: Alignment.center,
+                          child: TextButton(
+                            onPressed: () => _confirmRemovePendingItem(item),
+                            style: TextButton.styleFrom(
+                              foregroundColor: colorScheme.subtitleText,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: widget.isCompact ? 8 : 10,
+                                vertical: 6,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              "移除",
+                              style: TextStyle(
+                                fontSize: widget.isCompact ? 12 : 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          // 移除鈕
-                          Align(
-                            alignment: Alignment.center,
-                            child: TextButton(
-                              onPressed: () => _confirmRemovePendingItem(item),
-                              style: TextButton.styleFrom(
-                                foregroundColor: colorScheme.subtitleText,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: widget.isCompact ? 8 : 10,
-                                  vertical: 6,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                "移除",
-                                style: TextStyle(
-                                  fontSize: widget.isCompact ? 12 : 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
+                  return isLiquidGlass
+                      ? Container(
+                          margin: EdgeInsets.only(
+                            bottom: widget.isCompact ? 8 : 10,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          decoration: glassCardDecoration(
+                            context,
+                            borderRadius: 12,
+                          ),
+                          child: cardChild,
+                        )
+                      : Card(
+                          color: colorScheme.cardBackground,
+                          elevation: 1,
+                          margin: EdgeInsets.only(
+                            bottom: widget.isCompact ? 8 : 10,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: colorScheme.borderColor,
+                              width: 1,
+                            ),
+                          ),
+                          child: cardChild,
+                        );
                 }).toList(),
               ],
 
@@ -1327,90 +1538,102 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                     displayStatus = "登記加選";
                   }
 
-                  return Card(
-                    color: colorScheme.cardBackground,
-                    elevation: 1,
-                    margin: EdgeInsets.only(bottom: widget.isCompact ? 6 : 8),
-                    child: Padding(
-                      padding: widget.isCompact
-                          ? const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            )
-                          : const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: widget.isCompact ? 30 : 40,
-                            color: statusColor,
+                  final Widget cardChild = Padding(
+                    padding: widget.isCompact
+                        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+                        : const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      displayStatus,
-                                      style: TextStyle(
-                                        color: statusColor,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: widget.isCompact ? 12 : 13,
-                                      ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: widget.isCompact ? 30 : 40,
+                          color: statusColor,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    displayStatus,
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: widget.isCompact ? 12 : 13,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      course.courseNo,
-                                      style: TextStyle(
-                                        color: colorScheme.subtitleText,
-                                        fontSize: widget.isCompact ? 11 : 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  course.name,
-                                  style: TextStyle(
-                                    fontSize: widget.isCompact ? 13 : 15,
-                                    color: colorScheme.primaryText,
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => _confirmDropCourse(course),
-                            style: TextButton.styleFrom(
-                              foregroundColor: colorScheme.isDark
-                                  ? Colors.red[300]
-                                  : Colors.red[600],
-                              padding: widget.isCompact
-                                  ? EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    )
-                                  : null,
-                              minimumSize: widget.isCompact
-                                  ? const Size(40, 30)
-                                  : null,
-                            ),
-                            child: Text(
-                              "退選",
-                              style: TextStyle(
-                                fontSize: widget.isCompact ? 12 : 14,
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    course.courseNo,
+                                    style: TextStyle(
+                                      color: colorScheme.subtitleText,
+                                      fontSize: widget.isCompact ? 11 : 12,
+                                    ),
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 4),
+                              Text(
+                                course.name,
+                                style: TextStyle(
+                                  fontSize: widget.isCompact ? 13 : 15,
+                                  color: colorScheme.primaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => _confirmDropCourse(course),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colorScheme.isDark
+                                ? Colors.red[300]
+                                : Colors.red[600],
+                            padding: widget.isCompact
+                                ? EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  )
+                                : null,
+                            minimumSize: widget.isCompact
+                                ? const Size(40, 30)
+                                : null,
+                          ),
+                          child: Text(
+                            "退選",
+                            style: TextStyle(
+                              fontSize: widget.isCompact ? 12 : 14,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
+                  return isLiquidGlass
+                      ? Container(
+                          margin: EdgeInsets.only(
+                            bottom: widget.isCompact ? 6 : 8,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          decoration: glassCardDecoration(
+                            context,
+                            borderRadius: 12,
+                          ),
+                          child: cardChild,
+                        )
+                      : Card(
+                          color: colorScheme.cardBackground,
+                          elevation: 1,
+                          margin: EdgeInsets.only(
+                            bottom: widget.isCompact ? 6 : 8,
+                          ),
+                          child: cardChild,
+                        );
                 }).toList(),
               ],
             ],
@@ -1419,21 +1642,8 @@ class _CourseQueryTabState extends State<CourseQueryTab>
 
         // 送出按鈕
         if (_pendingItems.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.cardBackground,
-              boxShadow: [
-                BoxShadow(
-                  color: colorScheme.isDark
-                      ? Colors.black38
-                      : Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: SafeArea(
+          () {
+            final Widget barChild = SafeArea(
               child: SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -1457,8 +1667,46 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+            if (isLiquidGlass) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                      : Colors.white.withValues(alpha: 0.90),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.14)
+                          : Colors.black.withValues(alpha: 0.08),
+                      width: 1.0,
+                    ),
+                  ),
+                ),
+                child: barChild,
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.cardBackground,
+                boxShadow: [
+                  BoxShadow(
+                    color: colorScheme.isDark
+                        ? Colors.black38
+                        : Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: barChild,
+            );
+          }(),
       ],
     );
   }
@@ -1483,14 +1731,14 @@ class _CourseQueryTabState extends State<CourseQueryTab>
         const SnackBar(
           content: Text("已達到選課清單上限 (15門)"),
           backgroundColor: Colors.red,
-        ),
+          duration: const Duration(seconds: 2),),
       );
       return;
     }
     // 檢查是否重複
     if (_pendingItems.any((item) => item.id == course.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("已在選單中"), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("已在選單中"), backgroundColor: Colors.orange, duration: const Duration(seconds: 2)),
       );
       return;
     }
@@ -1501,7 +1749,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
         const SnackBar(
           content: Text("此課程已選上或登記加選，無法重複加選"),
           backgroundColor: Colors.orange,
-        ),
+          duration: const Duration(seconds: 2),),
       );
       return;
     }
@@ -1531,26 +1779,24 @@ class _CourseQueryTabState extends State<CourseQueryTab>
   void _confirmRemovePendingItem(PendingTransaction item) {
     // 加選項目移除前需使用者確認，避免誤刪已填好的志願/點數
     if (item.type == TransactionType.add) {
-      showDialog(
+      showGlassDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("確認移除"),
-          content: Text("確定要將「${item.name}」從待加選清單中移除嗎？"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("取消"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _removePendingItem(item);
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text("移除"),
-            ),
-          ],
-        ),
+        title: const Text("確認移除"),
+        content: Text("確定要將「${item.name}」從待加選清單中移除嗎？"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context, rootNavigator: true).pop();
+              _removePendingItem(item);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("移除"),
+          ),
+        ],
       );
     } else {
       _removePendingItem(item);
@@ -1571,35 +1817,33 @@ class _CourseQueryTabState extends State<CourseQueryTab>
       return;
     }
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("確認退選項目"),
-        content: Text("您確定要將「${course.name}」加入退選名單嗎？\n(將在點擊送出後一併送至選課系統)"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _pendingItems.add(
-                  PendingTransaction(
-                    id: course.courseNo,
-                    name: course.name,
-                    type: TransactionType.drop,
-                  ),
-                );
-                _saveCart();
-              });
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text("加入退選名單"),
-          ),
-        ],
-      ),
+      title: const Text("確認退選項目"),
+      content: Text("您確定要將「${course.name}」加入退選名單嗎？\n(將在點擊送出後一併送至選課系統)"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("取消"),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(context, rootNavigator: true).pop();
+            setState(() {
+              _pendingItems.add(
+                PendingTransaction(
+                  id: course.courseNo,
+                  name: course.name,
+                  type: TransactionType.drop,
+                ),
+              );
+              _saveCart();
+            });
+          },
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text("加入退選名單"),
+        ),
+      ],
     );
   }
 
@@ -1613,51 +1857,49 @@ class _CourseQueryTabState extends State<CourseQueryTab>
       }
     }).toList();
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("確認送出選課結果"),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("即將執行 ${logs.length} 項操作：\n"),
-              ...logs.map(
-                (l) => Text(
-                  l,
-                  style: TextStyle(
-                    color: l.startsWith("[退選]") ? Colors.red : Colors.blue[800],
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
+      title: const Text("確認送出選課結果"),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("即將執行 ${logs.length} 項操作：\n"),
+            ...logs.map(
+              (l) => Text(
+                l,
+                style: TextStyle(
+                  color: l.startsWith("[退選]") ? Colors.red : Colors.blue[800],
+                  fontSize: 13,
+                  height: 1.5,
                 ),
               ),
-              const SizedBox(height: 10),
-              const Text(
-                "注意：送出過程可能需要幾秒鐘。",
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "注意：送出過程可能需要幾秒鐘。",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("取消"),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.of(context, rootNavigator: true).pop();
+            _processSubmission();
+          },
+          child: const Text(
+            "確定送出",
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              _processSubmission();
-            },
-            child: const Text(
-              "確定送出",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -1687,7 +1929,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
           .submitTransactions(serviceItems);
 
       if (!mounted) return;
-      Navigator.pop(context); // 關閉 Loading
+      Navigator.of(context, rootNavigator: true).pop(); // 關閉 Loading
 
       if (result.success == false && result.failures.isNotEmpty) {
         _showFailureDialog(result.failures);
@@ -1708,91 +1950,91 @@ class _CourseQueryTabState extends State<CourseQueryTab>
       widget.onRequestRefresh();
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.of(context, rootNavigator: true).pop(); // 關閉 Loading
       _showErrorDialog(e.toString());
     }
   }
 
   // --- Dialog Helpers ---
   void _showFailureDialog(List<submit_service.FailedCourse> failures) {
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("⚠️ 加退選部分失敗", style: TextStyle(color: Colors.red)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: failures.length,
-            itemBuilder: (context, index) {
-              final f = failures[index];
-              return ListTile(
-                leading: const Icon(Icons.error_outline, color: Colors.red),
-                title: Text(f.courseName),
-                subtitle: Text("原因：${f.reason}"),
-              );
-            },
-          ),
+      title: const Text("⚠️ 加退選部分失敗", style: TextStyle(color: Colors.red)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: failures.length,
+          itemBuilder: (context, index) {
+            final f = failures[index];
+            return ListTile(
+              leading: const Icon(Icons.error_outline, color: Colors.red),
+              title: Text(f.courseName),
+              subtitle: Text("原因：${f.reason}"),
+            );
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("我知道了"),
-          ),
-        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("我知道了"),
+        ),
+      ],
     );
   }
 
   void _showSuccessDialog() {
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text("請求已送出"),
-          ],
-        ),
-        content: const Text(
-          "加退選請求已成功送至系統。\n\n⚠️ 重要提示：\n系統狀態可能會有延遲，請務必稍後使用「電腦開啟學校網站」再次確認您的課表。",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("好，我會確認"),
-          ),
+      title: const Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green),
+          SizedBox(width: 8),
+          Text("請求已送出"),
         ],
       ),
+      content: const Text(
+        "加退選請求已成功送至系統。\n\n⚠️ 重要提示：\n系統狀態可能會有延遲，請務必稍後使用「電腦開啟學校網站」再次確認您的課表。",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("好，我會確認"),
+        ),
+      ],
     );
   }
 
   void _showErrorDialog(String message) {
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("❌ 送出失敗"),
-        content: Text("發生錯誤：\n$message"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("確定"),
-          ),
-        ],
-      ),
+      title: const Text("❌ 送出失敗"),
+      content: Text("發生錯誤：\n$message"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("確定"),
+        ),
+      ],
     );
   }
 
   // --- 搜尋條件 Sheet (省略部分 UI 程式碼，邏輯與原版相同，僅需確保呼叫 _performSearch) ---
   void _showSearchSheet() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true, // 讓鍵盤彈出時不會遮擋
-      backgroundColor: colorScheme.cardBackground,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: isLiquidGlass
+          ? Colors.transparent
+          : colorScheme.cardBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(isLiquidGlass ? 24 : 20),
+        ),
       ),
       builder: (context) {
         return StatefulBuilder(
@@ -1808,7 +2050,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
               maxChildSize: 0.95,
               expand: false,
               builder: (context, scrollController) {
-                return SingleChildScrollView(
+                final Widget scrollContent = SingleChildScrollView(
                   controller: scrollController,
                   padding: EdgeInsets.only(
                     left: 20,
@@ -2058,6 +2300,27 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                     ],
                   ),
                 );
+
+                if (isLiquidGlass) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1E222D).withValues(alpha: 0.90)
+                          : Colors.white.withValues(alpha: 0.90),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.14)
+                            : Colors.black.withValues(alpha: 0.08),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: scrollContent,
+                  );
+                }
+                return scrollContent;
               },
             );
           },
@@ -2211,14 +2474,50 @@ class _CourseQueryTabState extends State<CourseQueryTab>
         return;
       }
 
+      // 嘗試從選課助手存檔中找出這些課程所屬的學期
+      String? exportedSemester;
+      try {
+        final currentScheduleId =
+            prefs.getString('current_assistant_schedule_id') ?? 'default';
+        final courseKey = currentScheduleId == 'default'
+            ? 'assistant_courses'
+            : 'assistant_courses_$currentScheduleId';
+        String? assistantJsonStr = prefs.getString(courseKey);
+        if (assistantJsonStr != null && assistantJsonStr.isNotEmpty) {
+          List<dynamic> decoded = jsonDecode(assistantJsonStr);
+          for (var v in decoded) {
+            if (exportedIds.contains(v['code'])) {
+              exportedSemester = v['semester'];
+              if (exportedSemester != null && exportedSemester.isNotEmpty) {
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("讀取選課助手學期失敗: $e");
+      }
+
       // 💡 立即移除 Key，確保同一批資料絕對不會被匯入第二次
       await prefs.remove('exported_course_ids');
 
-      // 確保搜尋用的課程總表已經載入
-      await CourseQueryService.instance.getCourses();
+      final targetSemester = exportedSemester ?? _selectedSemester;
+
+      // 確保搜尋用的課程總表已經載入對應學期
+      await CourseQueryService.instance.getCourses(semester: targetSemester);
+
+      // 如果匯出的學期與目前選取的學期不同，則自動切換學期，讓使用者看得到
+      if (targetSemester != null && targetSemester != _selectedSemester) {
+        if (mounted) {
+          setState(() {
+            _selectedSemester = targetSemester;
+          });
+        }
+      }
 
       int successCount = 0;
       int duplicateCount = 0;
+      List<String> failedIds = [];
 
       for (String id in exportedIds) {
         // 1. 檢查是否已經在購物車裡 (包含待加選、待退選)
@@ -2253,23 +2552,31 @@ class _CourseQueryTabState extends State<CourseQueryTab>
             ),
           );
           successCount++;
+        } else {
+          failedIds.add(id);
         }
       }
 
       // 如果有匯入任何東西，觸發畫面重繪並顯示提示
-      if (successCount > 0 || duplicateCount > 0) {
+      if (successCount > 0 || duplicateCount > 0 || failedIds.isNotEmpty) {
         if (mounted) {
           setState(() {
             _showEditListMode = true; // 自動幫使用者切換到「編輯選單」分頁讓他看
           });
           _saveCart();
+
+          String message = "已從選課助手匯入 $successCount 門課程至選課購物車";
+          if (duplicateCount > 0) {
+            message += "\n(跳過 $duplicateCount 門已在購物車或已選之課程)";
+          }
+          if (failedIds.isNotEmpty) {
+            message += "\n(學期 $targetSemester 找不到課號: ${failedIds.join(', ')})";
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                "已從助手匯入 $successCount 門課程至購物車" +
-                    (duplicateCount > 0 ? " (跳過 $duplicateCount 門重複課程)" : ""),
-              ),
-              backgroundColor: Colors.green,
+              content: Text(message),
+              backgroundColor: successCount > 0 ? Colors.green : Colors.orange,
               duration: const Duration(seconds: 2),
             ),
           );
@@ -2370,7 +2677,9 @@ class _CourseQueryTabState extends State<CourseQueryTab>
     );
 
     try {
-      final response = await http.get(url);
+      final client = createHttpClient();
+      final response = await client.get(url);
+      client.close();
       if (response.statusCode == 200) {
         // ⚠️ 注意：中山舊系統通常是 Big5 編碼。如果遇到純中文亂碼，可能需要引入 cp950 套件。
         // 這裡先用 allowMalformed: true 避免報錯，英文與數字能正常顯示
@@ -2413,16 +2722,31 @@ class _CourseQueryTabState extends State<CourseQueryTab>
 
   Widget _buildImportView() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: EdgeInsets.only(
+        left: 16.0,
+        right: 16.0,
+        top: 16.0,
+        bottom: isLiquidGlass ? 100 : 16.0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
+              color: isLiquidGlass
+                  ? colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.12)
+                  : colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(8),
+              border: isLiquidGlass
+                  ? Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.35),
+                      width: 1.0,
+                    )
+                  : null,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2436,7 +2760,9 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: colorScheme.onPrimaryContainer,
+                        color: isLiquidGlass
+                            ? colorScheme.primary
+                            : colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ],
@@ -2444,7 +2770,11 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                 const SizedBox(height: 8),
                 Text(
                   "請至「中山選課小幫手網頁版」匯出加選課程，將產生的完整 JavaScript 程式碼複製並貼在下方欄位中。",
-                  style: TextStyle(color: colorScheme.onPrimaryContainer),
+                  style: TextStyle(
+                    color: isLiquidGlass
+                        ? colorScheme.primaryText
+                        : colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ],
             ),
@@ -2515,7 +2845,11 @@ class _CourseQueryTabState extends State<CourseQueryTab>
                 borderRadius: BorderRadius.circular(8),
               ),
               filled: true,
-              fillColor: colorScheme.subtleBackground,
+              fillColor: isLiquidGlass
+                  ? (isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.white.withValues(alpha: 0.4))
+                  : colorScheme.subtleBackground,
             ),
           ),
           const SizedBox(height: 16),
@@ -2563,7 +2897,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("剪貼簿內沒有文字！")));
+        ).showSnackBar(const SnackBar(content: Text("剪貼簿內沒有文字！"), duration: const Duration(seconds: 2)));
       }
     }
   }
@@ -2573,7 +2907,7 @@ class _CourseQueryTabState extends State<CourseQueryTab>
     if (input.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("請先貼上程式碼！")));
+      ).showSnackBar(const SnackBar(content: Text("請先貼上程式碼！"), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -2654,28 +2988,25 @@ class _CourseQueryTabState extends State<CourseQueryTab>
     } catch (e) {
       if (mounted) {
         final colorScheme = Theme.of(context).colorScheme;
-        showDialog(
+        showGlassDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: colorScheme.cardBackground,
-            title: Text(
-              "匯入失敗",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.primaryText,
-              ),
+          title: Text(
+            "匯入失敗",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primaryText,
             ),
-            content: Text(
-              e.toString(),
-              style: TextStyle(color: colorScheme.bodyText),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("確定", style: TextStyle(color: colorScheme.primary)),
-              ),
-            ],
           ),
+          content: Text(
+            e.toString(),
+            style: TextStyle(color: colorScheme.bodyText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+              child: Text("確定", style: TextStyle(color: colorScheme.primary)),
+            ),
+          ],
         );
       }
     } finally {
@@ -2685,67 +3016,61 @@ class _CourseQueryTabState extends State<CourseQueryTab>
 
   void _showImportResultDialog(int success, int skip, List<String> fails) {
     final colorScheme = Theme.of(context).colorScheme;
-    showDialog(
+    showGlassDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: colorScheme.cardBackground,
-        title: Text(
-          "匯入結果",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.primaryText,
-          ),
+      title: Text(
+        "匯入結果",
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: colorScheme.primaryText,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "✅ 成功匯入選課系統: $success 筆",
+            style: TextStyle(color: colorScheme.bodyText),
+          ),
+          if (skip > 0)
             Text(
-              "✅ 成功匯入選課系統: $success 筆",
+              "⏭️ 已存在跳過: $skip 筆",
               style: TextStyle(color: colorScheme.bodyText),
             ),
-            if (skip > 0)
-              Text(
-                "⏭️ 已存在跳過: $skip 筆",
-                style: TextStyle(color: colorScheme.bodyText),
-              ),
-            if (fails.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                "❌ 找不到課程:",
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                fails.join(", "),
-                style: const TextStyle(color: Colors.red, fontSize: 13),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // 關閉 Dialog
-              setState(() {
-                _importTextCtrl.clear();
-                _showImportMode = false;
-                _showEditListMode = true; // 自動切換到編輯選單
-              });
-            },
-            child: Text(
-              "確定",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.primary,
-              ),
+          if (fails.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              "❌ 找不到課程:",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
-          ),
+            Text(
+              fails.join(", "),
+              style: const TextStyle(color: Colors.red, fontSize: 13),
+            ),
+          ],
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context, rootNavigator: true).pop(); // 關閉 Dialog
+            setState(() {
+              _importTextCtrl.clear();
+              _showImportMode = false;
+              _showEditListMode = true; // 自動切換到編輯選單
+            });
+          },
+          child: Text(
+            "確定",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

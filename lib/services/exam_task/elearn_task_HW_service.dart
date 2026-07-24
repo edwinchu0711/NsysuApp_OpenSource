@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:path_provider/path_provider.dart';
+import '../http_client_factory.dart';
 
 // --- 模型 ---
 class ElearnTask {
@@ -181,7 +182,7 @@ class ElearnService {
   // ... (fetchDetails, downloadFile, login logic 保持不變) ...
   Future<Map<String, dynamic>> fetchExamDetails(int examId) async {
     await _ensureAuthenticated();
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final infoRes = await _get("$_baseUrl/api/exams/$examId", client);
       if (infoRes.statusCode != 200) throw Exception("無法讀取測驗資料");
@@ -201,7 +202,7 @@ class ElearnService {
 
   Future<Map<String, dynamic>> fetchHomeworkDetails(int homeworkId) async {
     await _ensureAuthenticated();
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final res = await _get("$_baseUrl/api/activities/$homeworkId", client);
       if (res.statusCode != 200) throw Exception("無法讀取作業資料");
@@ -213,7 +214,7 @@ class ElearnService {
 
   Future<File> downloadFile(int referenceId, String fileName) async {
     await _ensureAuthenticated();
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final url = "$_baseUrl/api/uploads/reference/$referenceId/blob";
       final response = await client.get(
@@ -222,7 +223,7 @@ class ElearnService {
       );
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
-        final safeName = fileName.replaceAll(RegExp(r'[^\w\s\.]'), '_');
+        final safeName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_');
         final file = File('${dir.path}/$safeName');
         await file.writeAsBytes(response.bodyBytes);
         return file;
@@ -257,7 +258,7 @@ class ElearnService {
   }
 
   Future<void> _login(String username, String password) async {
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       final startUrl = Uri.parse("$_baseUrl/login?next=/user/index");
       final res1 = await client.get(startUrl, headers: _baseHeaders);
@@ -322,7 +323,7 @@ class ElearnService {
 
   Future<List<ElearnTask>> _getCourseData(String semesterCode) async {
     List<ElearnTask> allTasks = [];
-    final client = http.Client();
+    final client = createHttpClient();
     try {
       var courseRes = await _post(
         "$_baseUrl/api/my-courses",

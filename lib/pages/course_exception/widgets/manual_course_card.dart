@@ -1,6 +1,8 @@
 // 檔案名稱：widgets/manual_course_card.dart
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart'; // 引入 AppTheme 與 AppColors 擴充
+import '../../../theme/layout_style_notifier.dart';
+import '../../../widgets/glass/glass_card.dart';
 import '../course_exception_models.dart';
 import 'course_dropdowns.dart';
 
@@ -43,15 +45,14 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
   Widget build(BuildContext context) {
     final bool isWide = MediaQuery.of(context).size.width >= 800;
     final manualCourse = widget.manualCourse;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     if (!isWide) {
       // 窄螢幕排版，完全保持原有邏輯
-      return Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
+      final Widget cardChild = Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -100,7 +101,11 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                         height: 42,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[400]!),
+                          border: Border.all(
+                            color: isLiquidGlass
+                                ? colorScheme.borderColor
+                                : Colors.grey[400]!,
+                          ),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Row(
@@ -112,15 +117,21 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                                     : manualCourse.courseNo,
                                 style: TextStyle(
                                   color: manualCourse.courseNo.isEmpty
-                                      ? Colors.grey
-                                      : Colors.black87,
+                                      ? (isLiquidGlass
+                                            ? colorScheme.subtitleText
+                                            : Colors.grey)
+                                      : (isLiquidGlass
+                                            ? colorScheme.primaryText
+                                            : Colors.black87),
                                 ),
                               ),
                             ),
-                            const Icon(
+                            Icon(
                               Icons.search,
                               size: 18,
-                              color: Colors.grey,
+                              color: isLiquidGlass
+                                  ? colorScheme.iconColor
+                                  : Colors.grey,
                             ),
                           ],
                         ),
@@ -142,18 +153,34 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
               ),
             ],
           ),
-        ),
-      );
+        );
+      return isLiquidGlass
+          ? Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              clipBehavior: Clip.antiAlias,
+              decoration: glassCardDecoration(context, borderRadius: 12),
+              child: cardChild,
+            )
+          : Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: cardChild,
+            );
     }
 
     // 寬螢幕排版，具有收合、醒目邊框與狀態指引
-    final colorScheme = Theme.of(context).colorScheme;
     final bool isActive = widget.isActive;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
+        color: isLiquidGlass
+            ? (colorScheme.isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.white.withValues(alpha: 0.45))
+            : colorScheme.cardBackground,
         border: Border.all(
           color: isActive
               ? colorScheme.primary
@@ -391,8 +418,16 @@ class _ManualCourseCardState extends State<ManualCourseCard> {
                         ),
                         decoration: BoxDecoration(
                           color: manualCourse.selectedAction == "退選"
-                              ? Colors.red.shade50
-                              : Colors.blue.shade50,
+                              ? (isLiquidGlass
+                                    ? Colors.red.withValues(
+                                        alpha: colorScheme.isDark ? 0.18 : 0.12,
+                                      )
+                                    : Colors.red.shade50)
+                              : (isLiquidGlass
+                                    ? Colors.blue.withValues(
+                                        alpha: colorScheme.isDark ? 0.18 : 0.12,
+                                      )
+                                    : Colors.blue.shade50),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(

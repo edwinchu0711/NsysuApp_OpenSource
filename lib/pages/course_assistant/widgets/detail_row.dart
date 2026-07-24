@@ -32,7 +32,7 @@ class ModernDetailRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(isDark ? 0.15 : 0.08),
+              color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 18),

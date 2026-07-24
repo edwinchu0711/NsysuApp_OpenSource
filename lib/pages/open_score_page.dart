@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/open_score_service.dart';
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_dialog.dart';
+import '../widgets/glass/glass_card.dart';
 
 class OpenScorePage extends StatefulWidget {
   const OpenScorePage({Key? key}) : super(key: key);
@@ -148,7 +153,7 @@ class _OpenScorePageState extends State<OpenScorePage> {
               BoxShadow(
                 color:
                     (colorScheme.isDark ? Colors.teal[200]! : Colors.teal[800]!)
-                        .withOpacity(0.1),
+                        .withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -217,13 +222,14 @@ class _OpenScorePageState extends State<OpenScorePage> {
         // 下半部明細列表 (獨立滾動)
         Expanded(
           child: Container(
-            decoration: BoxDecoration(
-              color: colorScheme.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: colorScheme.borderColor.withOpacity(0.5),
-              ),
-            ),
+            decoration: glassCardDecoration(context, borderRadius: 16) ??
+                BoxDecoration(
+                  color: colorScheme.cardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: colorScheme.borderColor.withValues(alpha: 0.5),
+                  ),
+                ),
             clipBehavior: Clip.antiAlias,
             child: scores.isEmpty
                 ? const Center(
@@ -233,10 +239,14 @@ class _OpenScorePageState extends State<OpenScorePage> {
                     ),
                   )
                 : ListView(
-                    padding: EdgeInsets.zero,
+                    padding: EdgeInsets.only(
+                      bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+                    ),
                     children: [
-                      Container(
-                        color: colorScheme.secondaryCardBackground,
+                       Container(
+                        color: LayoutStyleNotifier.instance.isLiquidGlass
+                            ? Colors.transparent
+                            : colorScheme.secondaryCardBackground,
                         padding: const EdgeInsets.symmetric(
                           vertical: 12,
                           horizontal: 20,
@@ -287,11 +297,13 @@ class _OpenScorePageState extends State<OpenScorePage> {
                             (scoreItem['item'] ?? "").contains("原始總成績");
 
                         return Container(
-                          color: isTotal
-                              ? (colorScheme.isDark
-                                    ? Colors.yellow[900]?.withValues(alpha: 0.1)
-                                    : Colors.yellow.withValues(alpha: 0.04))
-                              : colorScheme.cardBackground,
+                          color: LayoutStyleNotifier.instance.isLiquidGlass
+                              ? Colors.transparent
+                              : (isTotal
+                                  ? (colorScheme.isDark
+                                      ? Colors.yellow[900]?.withValues(alpha: 0.1)
+                                      : Colors.yellow.withValues(alpha: 0.04))
+                                  : colorScheme.cardBackground),
                           padding: const EdgeInsets.symmetric(
                             vertical: 14.0,
                             horizontal: 20.0,
@@ -371,10 +383,14 @@ class _OpenScorePageState extends State<OpenScorePage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 750;
 
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
-        titleSpacing: 0,
         centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          tooltip: "返回",
+          onPressed: () => Navigator.maybePop(context),
+        ),
         title: ValueListenableBuilder<String?>(
           valueListenable: OpenScoreService.instance.lastUpdatedNotifier,
           builder: (context, lastUpdated, child) {
@@ -412,23 +428,21 @@ class _OpenScorePageState extends State<OpenScorePage> {
             ),
             tooltip: "自動更新期間說明",
             onPressed: () {
-              showDialog(
+              showGlassDialog(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("開放成績自動更新說明"),
-                  content: const Text(
-                    "為了節省校務系統資源與電力，本 App 僅在「成績開放查詢期間」才會在啟動時自動於背景更新開放成績。\n\n"
-                    "• 冬季開放期間：12/15 ~ 1/25\n"
-                    "• 夏季開放期間：5/15 ~ 6/25\n\n"
-                    "※ 非上述自動更新期間，您仍可隨時點擊右上角的重新整理按鈕手動更新資料。",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("確定"),
-                    ),
-                  ],
+                title: const Text("開放成績自動更新說明"),
+                content: const Text(
+                  "為了節省校務系統資源與電力，本 App 僅在「成績開放查詢期間」才會在啟動時自動於背景更新開放成績。\n\n"
+                  "• 冬季開放期間：12/15 ~ 1/25\n"
+                  "• 夏季開放期間：5/15 ~ 6/25\n\n"
+                  "※ 非上述自動更新期間，您仍可隨時點擊右上角的重新整理按鈕手動更新資料。",
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+                    child: const Text("確定"),
+                  ),
+                ],
               );
             },
           ),
@@ -445,15 +459,22 @@ class _OpenScorePageState extends State<OpenScorePage> {
                     : const Icon(Icons.refresh),
                 onPressed: isLoading
                     ? null
-                    : () {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("正在重新抓取資料..."),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                        OpenScoreService.instance.fetchOpenScores();
+                    : () async {
+                        if (await OfflineErrorHandler.handleRefresh(context)) return;
+                        try {
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("正在重新抓取資料..."),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          await OpenScoreService.instance.fetchOpenScores();
+                        } catch (e) {
+                          if (mounted) {
+                            await OfflineErrorHandler.show(context, e);
+                          }
+                        }
                       },
               );
             },
@@ -481,11 +502,11 @@ class _OpenScorePageState extends State<OpenScorePage> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(
+                    color: Colors.red.withValues(alpha: 
                       colorScheme.isDark ? 0.2 : 0.07,
                     ),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.red.withOpacity(0.4)),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,7 +601,9 @@ class _OpenScorePageState extends State<OpenScorePage> {
                         SizedBox(
                           width: 320,
                           child: ListView.builder(
-                            padding: EdgeInsets.zero,
+                            padding: EdgeInsets.only(
+                              bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+                            ),
                             itemCount: results.length,
                             itemBuilder: (context, index) {
                               final courseData = results[index];
@@ -601,21 +624,27 @@ class _OpenScorePageState extends State<OpenScorePage> {
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 6),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? colorScheme.primaryContainer
-                                            .withOpacity(0.3)
-                                      : colorScheme.cardBackground,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? colorScheme.primary
-                                        : colorScheme.borderColor.withOpacity(
-                                            0.5,
-                                          ),
-                                    width: isSelected ? 1.5 : 1.0,
-                                  ),
-                                ),
+                                decoration: glassCardDecoration(
+                                      context,
+                                      borderRadius: 12,
+                                      isSelected: isSelected,
+                                      selectedColor: colorScheme.primary,
+                                    ) ??
+                                    BoxDecoration(
+                                      color: isSelected
+                                          ? colorScheme.primaryContainer
+                                                .withValues(alpha: 0.3)
+                                          : colorScheme.cardBackground,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? colorScheme.primary
+                                            : colorScheme.borderColor.withValues(alpha: 
+                                                0.5,
+                                              ),
+                                        width: isSelected ? 1.5 : 1.0,
+                                      ),
+                                    ),
                                 child: ListTile(
                                   dense: true,
                                   contentPadding: const EdgeInsets.symmetric(
@@ -625,9 +654,11 @@ class _OpenScorePageState extends State<OpenScorePage> {
                                   leading: Container(
                                     padding: const EdgeInsets.all(6),
                                     decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? colorScheme.primary.withOpacity(0.1)
-                                          : colorScheme.secondaryCardBackground,
+                                      color: LayoutStyleNotifier.instance.isLiquidGlass
+                                          ? Colors.transparent
+                                          : (isSelected
+                                              ? colorScheme.primary.withValues(alpha: 0.1)
+                                              : colorScheme.secondaryCardBackground),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
@@ -682,9 +713,11 @@ class _OpenScorePageState extends State<OpenScorePage> {
 
                 // 手機版：維持原有的 ExpansionTile 折疊卡片列表
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+                  padding: EdgeInsets.only(
+                    left: 12,
+                    right: 12,
+                    top: 10,
+                    bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 10,
                   ),
                   itemCount: results.length,
                   itemBuilder: (context, index) {
@@ -693,17 +726,12 @@ class _OpenScorePageState extends State<OpenScorePage> {
                         .map((item) => Map<String, String>.from(item))
                         .toList();
 
-                    return Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: ExpansionTile(
+                    final tile = ExpansionTile(
                         initiallyExpanded: false,
                         leading: CircleAvatar(
-                          backgroundColor: colorScheme.secondaryCardBackground,
+                          backgroundColor: LayoutStyleNotifier.instance.isLiquidGlass
+                              ? Colors.transparent
+                              : colorScheme.secondaryCardBackground,
                           child: Icon(
                             Icons.book_rounded,
                             color: colorScheme.accentBlue,
@@ -721,7 +749,9 @@ class _OpenScorePageState extends State<OpenScorePage> {
                         children: [
                           if (scores.isNotEmpty) ...[
                             Container(
-                              color: colorScheme.secondaryCardBackground,
+                              color: LayoutStyleNotifier.instance.isLiquidGlass
+                                  ? Colors.transparent
+                                  : colorScheme.secondaryCardBackground,
                               padding: const EdgeInsets.symmetric(
                                 vertical: 8,
                                 horizontal: 16,
@@ -770,15 +800,17 @@ class _OpenScorePageState extends State<OpenScorePage> {
                               );
 
                               return Container(
-                                color: isTotal
-                                    ? (colorScheme.isDark
-                                          ? Colors.yellow[900]?.withValues(
-                                              alpha: 0.1,
-                                            )
-                                          : Colors.yellow.withValues(
-                                              alpha: 0.04,
-                                            ))
-                                    : colorScheme.cardBackground,
+                                color: LayoutStyleNotifier.instance.isLiquidGlass
+                                    ? Colors.transparent
+                                    : (isTotal
+                                        ? (colorScheme.isDark
+                                            ? Colors.yellow[900]?.withValues(
+                                                alpha: 0.1,
+                                              )
+                                            : Colors.yellow.withValues(
+                                                alpha: 0.04,
+                                              ))
+                                        : colorScheme.cardBackground),
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 12.0,
                                   horizontal: 16.0,
@@ -849,7 +881,28 @@ class _OpenScorePageState extends State<OpenScorePage> {
                             ),
                           const SizedBox(height: 8),
                         ],
+                      );
+
+                    if (LayoutStyleNotifier.instance.isLiquidGlass) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: glassCardDecoration(context, borderRadius: 15) ??
+                            const BoxDecoration(color: Colors.transparent),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: tile,
+                        ),
+                      );
+                    }
+                    return Card(
+                      elevation: 2,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
+                      clipBehavior: Clip.antiAlias,
+                      child: tile,
                     );
                   },
                 );

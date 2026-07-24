@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'course_service.dart';
 import 'open_score_service.dart';
 import 'historical_score_service.dart';
 import 'exam_task/elearn_task_HW_service.dart';

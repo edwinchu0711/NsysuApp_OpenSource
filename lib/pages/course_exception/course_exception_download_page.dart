@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
 import '../../services/course_exception_service.dart';
+import '../../widgets/glass/glass_page_scaffold.dart';
 
 class AbnormalWebViewPage extends StatefulWidget {
   final Map<String, String> postData;
@@ -61,15 +63,21 @@ class _AbnormalWebViewPageState extends State<AbnormalWebViewPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    return GlassPageScaffold(
       appBar: AppBar(
         title: const Text("申請流程"),
         centerTitle: true,
-        backgroundColor: colorScheme.cardBackground,
+        backgroundColor:
+            isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
+        surfaceTintColor: isLiquidGlass ? Colors.transparent : null,
+        elevation: isLiquidGlass ? 0 : 0.5,
+        scrolledUnderElevation: isLiquidGlass ? 0 : null,
         foregroundColor: colorScheme.primaryText,
-        elevation: 0.5,
       ),
-      backgroundColor: colorScheme.pageBackground,
+      backgroundColor: isLiquidGlass
+          ? Colors.transparent
+          : colorScheme.pageBackground,
       body: _buildOverlayUI(),
     );
   }

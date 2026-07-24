@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/course_model.dart';
 import '../utils/utils.dart';
 import 'storage_service.dart';
+import 'http_client_factory.dart';
 
 class CourseService {
   static final CourseService instance = CourseService._privateConstructor();
@@ -11,7 +12,7 @@ class CourseService {
 
   static const String CACHE_KEY = "cached_courses";
   final String _baseUrl = "https://selcrs.nsysu.edu.tw";
-  final http.Client _client = http.Client();
+  final http.Client _client = createHttpClient();
 
   final ValueNotifier<Map<String, List<Course>>> allCoursesNotifier =
       ValueNotifier({});

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/course_assistant_models.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
 
 class AssistantAddCustomEventForm extends StatefulWidget {
   final VoidCallback onEventAdded;
@@ -65,20 +66,23 @@ class _AssistantAddCustomEventFormState
     if (_titleCtrl.text.trim().isEmpty || _selectedPeriods.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("請填寫標題並至少選擇一節課")));
+      ).showSnackBar(const SnackBar(content: Text("請填寫標題並至少選擇一節課"), duration: const Duration(seconds: 2)));
       return;
     }
     if (_calculateTextLength(_locationCtrl.text.trim()) > 6.0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("位置輸入過長，請縮減至6個中文字或12個英數字以內")),
+        const SnackBar(content: Text("位置輸入過長，請縮減至6個中文字或12個英數字以內"), duration: const Duration(seconds: 2)),
       );
       return;
     }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final currentScheduleId = prefs.getString('current_assistant_schedule_id') ?? 'default';
-      final eventKey = currentScheduleId == 'default' ? 'custom_events' : 'custom_events_$currentScheduleId';
+      final currentScheduleId =
+          prefs.getString('current_assistant_schedule_id') ?? 'default';
+      final eventKey = currentScheduleId == 'default'
+          ? 'custom_events'
+          : 'custom_events_$currentScheduleId';
       List<CustomEvent> events = [];
       String? eventJson = prefs.getString(eventKey);
       if (eventJson != null && eventJson.isNotEmpty) {
@@ -108,7 +112,7 @@ class _AssistantAddCustomEventFormState
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("行程已加入！")));
+      ).showSnackBar(const SnackBar(content: Text("行程已加入！"), duration: const Duration(seconds: 2)));
 
       // 清空表單
       _titleCtrl.clear();
@@ -124,7 +128,7 @@ class _AssistantAddCustomEventFormState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("儲存失敗：$e")));
+        ).showSnackBar(SnackBar(content: Text("儲存失敗：$e"), duration: const Duration(seconds: 2)));
       }
     }
   }
@@ -132,10 +136,48 @@ class _AssistantAddCustomEventFormState
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final isDark = colorScheme.isDark;
+    final Color fieldFill = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.white.withValues(alpha: 0.4))
+        : colorScheme.subtleBackground;
+    final Color fieldBorder = isLiquidGlass
+        ? (isDark
+              ? Colors.white.withValues(alpha: 0.35)
+              : Colors.black.withValues(alpha: 0.08))
+        : colorScheme.borderColor;
+    InputDecoration fieldDecoration(String label) => InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: colorScheme.subtitleText),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: fieldBorder, width: 1.0),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: fieldBorder, width: 1.0),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+      ),
+      filled: true,
+      fillColor: fieldFill,
+    );
     return Scaffold(
       appBar: null,
+      backgroundColor: isLiquidGlass ? Colors.transparent : null,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.only(
+          left: 16.0,
+          right: 16.0,
+          top: 16.0,
+          bottom: (isLiquidGlass && MediaQuery.of(context).size.width >= 800)
+              ? 100.0
+              : 16.0,
+        ),
         child: Form(
           key: _formKey,
           child: Column(
@@ -155,37 +197,19 @@ class _AssistantAddCustomEventFormState
               TextField(
                 controller: _titleCtrl,
                 style: TextStyle(color: colorScheme.primaryText),
-                decoration: InputDecoration(
-                  labelText: '標題 (如: 工讀、社團)',
-                  labelStyle: TextStyle(color: colorScheme.subtitleText),
-                  border: const OutlineInputBorder(),
-                  filled: true,
-                  fillColor: colorScheme.subtleBackground,
-                ),
+                decoration: fieldDecoration('標題 (如: 工讀、社團)'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _locationCtrl,
                 style: TextStyle(color: colorScheme.primaryText),
-                decoration: InputDecoration(
-                  labelText: '位置',
-                  labelStyle: TextStyle(color: colorScheme.subtitleText),
-                  border: const OutlineInputBorder(),
-                  filled: true,
-                  fillColor: colorScheme.subtleBackground,
-                ),
+                decoration: fieldDecoration('位置'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _detailsCtrl,
                 style: TextStyle(color: colorScheme.primaryText),
-                decoration: InputDecoration(
-                  labelText: '詳細內容 (地點、備註)',
-                  labelStyle: TextStyle(color: colorScheme.subtitleText),
-                  border: const OutlineInputBorder(),
-                  filled: true,
-                  fillColor: colorScheme.subtleBackground,
-                ),
+                decoration: fieldDecoration('詳細內容 (地點、備註)'),
                 maxLines: 2,
               ),
               const SizedBox(height: 16),
@@ -196,23 +220,44 @@ class _AssistantAddCustomEventFormState
                   color: colorScheme.subtitleText,
                 ),
               ),
-              DropdownButton<int>(
-                isExpanded: true,
-                value: _selectedDay,
-                dropdownColor: colorScheme.cardBackground,
-                style: TextStyle(color: colorScheme.primaryText),
-                items: List.generate(7, (index) {
-                  return DropdownMenuItem(
-                    value: index + 1,
-                    child: Text(
-                      "星期${_fullWeekDays[index]}",
-                      style: TextStyle(color: colorScheme.primaryText),
-                    ),
-                  );
-                }),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedDay = val);
-                },
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: isLiquidGlass
+                    ? BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.white.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.08),
+                          width: 1.0,
+                        ),
+                      )
+                    : null,
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  value: _selectedDay,
+                  dropdownColor: colorScheme.cardBackground,
+                  style: TextStyle(color: colorScheme.primaryText),
+                  underline: isLiquidGlass ? const SizedBox.shrink() : null,
+                  items: List.generate(7, (index) {
+                    return DropdownMenuItem(
+                      value: index + 1,
+                      child: Text(
+                        "星期${_fullWeekDays[index]}",
+                        style: TextStyle(color: colorScheme.primaryText),
+                      ),
+                    );
+                  }),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedDay = val);
+                  },
+                ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -239,7 +284,11 @@ class _AssistantAddCustomEventFormState
                     ),
                     selected: isSelected,
                     selectedColor: colorScheme.primaryContainer,
-                    backgroundColor: colorScheme.subtleBackground,
+                    backgroundColor: isLiquidGlass
+                        ? (isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.white.withValues(alpha: 0.4))
+                        : colorScheme.subtleBackground,
                     checkmarkColor: colorScheme.primary,
                     showCheckmark: false,
                     onSelected: (bool selected) {

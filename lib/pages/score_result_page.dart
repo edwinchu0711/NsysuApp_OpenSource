@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/historical_score_service.dart';
+import '../services/offline_error_handler.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_dropdown.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_dialog.dart';
+import '../widgets/glass/glass_card.dart';
 
 class ScoreResultPage extends StatefulWidget {
   const ScoreResultPage({Key? key}) : super(key: key);
@@ -33,11 +39,14 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
     return ValueListenableBuilder<bool>(
       valueListenable: HistoricalScoreService.instance.isLoadingNotifier,
       builder: (context, isLoading, _) {
-        return Scaffold(
-          backgroundColor: colorScheme.pageBackground,
+        return GlassPageScaffold(
           appBar: AppBar(
-            titleSpacing: 0,
             centerTitle: false,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+              tooltip: "返回",
+              onPressed: () => Navigator.maybePop(context),
+            ),
             title: ValueListenableBuilder<String?>(
               valueListenable:
                   HistoricalScoreService.instance.syncErrorNotifier,
@@ -60,18 +69,19 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                           if (syncError != null)
                             GestureDetector(
                               onTap: () {
-                                showDialog(
+                                showGlassDialog(
                                   context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text("同步失敗資訊"),
-                                    content: Text(syncError),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text("確定"),
-                                      ),
-                                    ],
-                                  ),
+                                  title: const Text("同步失敗資訊"),
+                                  content: Text(syncError),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(
+                                        context,
+                                        rootNavigator: true,
+                                      ).pop(),
+                                      child: const Text("確定"),
+                                    ),
+                                  ],
                                 );
                               },
                               child: Row(
@@ -118,27 +128,35 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
             ),
             elevation: 0,
             actions: [
-              // 資訊按鈕
               IconButton(
-                icon: Icon(Icons.info_outline_rounded, color: Colors.blueGrey),
+                icon: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Colors.blueGrey,
+                ),
                 tooltip: "預覽功能說明",
                 onPressed: () {
                   _showPreviewStatusDialog();
                 },
               ),
-              // 重新整理按鈕
               GestureDetector(
                 onTapDown: isLoading
                     ? null
-                    : (details) {
+                    : (details) async {
+                        if (await OfflineErrorHandler.handleRefresh(context)) return;
                         _isLongPressTriggered = false;
                         _refreshTimer = Timer(
                           const Duration(milliseconds: 2500),
-                          () {
-                            _isLongPressTriggered = true;
-                            HistoricalScoreService.instance.fetchAllData(
-                              forceFullRefresh: true,
-                            );
+                          () async {
+                            try {
+                              _isLongPressTriggered = true;
+                              await HistoricalScoreService.instance.fetchAllData(
+                                forceFullRefresh: true,
+                              );
+                            } catch (e) {
+                              if (mounted) {
+                                await OfflineErrorHandler.show(context, e);
+                              }
+                            }
                           },
                         );
                       },
@@ -146,6 +164,7 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                     ? null
                     : (details) {
                         _refreshTimer?.cancel();
+                        if (OfflineErrorHandler.isOffline) return;
                         if (!_isLongPressTriggered) {
                           HistoricalScoreService.instance.fetchAllData(
                             forceFullRefresh: false,
@@ -239,13 +258,30 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                         : Column(
                             children: [
                               Container(
-                                padding: const EdgeInsets.only(
-                                  left: 16,
-                                  right: 16,
-                                  top: 4,
-                                  bottom: 10,
-                                ),
-                                color: colorScheme.cardBackground,
+                                padding:
+                                    LayoutStyleNotifier.instance.isLiquidGlass
+                                    ? const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      )
+                                    : const EdgeInsets.only(
+                                        left: 16,
+                                        right: 16,
+                                        top: 4,
+                                        bottom: 10,
+                                      ),
+                                margin:
+                                    LayoutStyleNotifier.instance.isLiquidGlass
+                                    ? const EdgeInsets.fromLTRB(16, 8, 16, 12)
+                                    : EdgeInsets.zero,
+                                decoration:
+                                    glassCardDecoration(
+                                      context,
+                                      borderRadius: 16,
+                                    ) ??
+                                    BoxDecoration(
+                                      color: colorScheme.cardBackground,
+                                    ),
                                 child: _buildDropdownRow(
                                   sortedYears: sortedYears,
                                   availableSems: availableSems,
@@ -385,6 +421,11 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
       }
     }
 
+    if (!hasValidValue(finalSummary.rank)) {
+      finalSummary.rank = "--";
+      finalSummary.classSize = "--";
+    }
+
     if (isTablet) {
       final colorScheme = Theme.of(context).colorScheme;
       return Padding(
@@ -405,18 +446,22 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                     // 篩選選單卡片
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colorScheme.cardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.borderColor.withOpacity(0.08),
-                            spreadRadius: 2,
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                      decoration:
+                          glassCardDecoration(context, borderRadius: 16) ??
+                          BoxDecoration(
+                            color: colorScheme.cardBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: colorScheme.borderColor.withValues(alpha: 
+                                  0.08,
+                                ),
+                                spreadRadius: 2,
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
                       child: _buildDropdownRow(
                         sortedYears: sortedYears,
                         availableSems: availableSems,
@@ -434,7 +479,9 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
             // 右側成績列表面板 (自適應寬度, 獨立滾動)
             Expanded(
               child: ListView(
-                padding: EdgeInsets.zero,
+                padding: EdgeInsets.only(
+                  bottom: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 0,
+                ),
                 children: [
                   _buildTableHeader(),
                   const SizedBox(height: 8),
@@ -455,7 +502,7 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
         _buildTableHeader(),
         const SizedBox(height: 8),
         ...sortedCourses.map((c) => _buildCourseCard(c)).toList(),
-        const SizedBox(height: 40),
+        SizedBox(height: LayoutStyleNotifier.instance.isLiquidGlass ? 100 : 40),
       ],
     );
   }
@@ -498,16 +545,13 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
 
     if (!mounted) return;
 
-    showDialog(
+    showGlassDialog(
       context: context,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return AlertDialog(
-          title: const Text(
-            "功能說明",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
+      title: const Text("功能說明", style: TextStyle(fontWeight: FontWeight.bold)),
+      content: Builder(
+        builder: (context) {
+          final colorScheme = Theme.of(context).colorScheme;
+          return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -572,15 +616,15 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("了解"),
-            ),
-          ],
-        );
-      },
+          );
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text("了解"),
+        ),
+      ],
     );
   }
 
@@ -822,24 +866,31 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: colorScheme.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? colorScheme.accentBlue : Colors.transparent,
-            width: 2.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? colorScheme.accentBlue.withOpacity(0.4)
-                  : colorScheme.borderColor.withOpacity(0.08),
-              spreadRadius: isSelected ? 2 : 2,
-              blurRadius: isSelected ? 12 : 8,
-              offset: isSelected ? Offset.zero : const Offset(0, 2),
+        decoration:
+            glassCardDecoration(
+              context,
+              borderRadius: 16,
+              isSelected: isSelected,
+              selectedColor: colorScheme.accentBlue,
+            ) ??
+            BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected ? colorScheme.accentBlue : Colors.transparent,
+                width: 2.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isSelected
+                      ? colorScheme.accentBlue.withValues(alpha: 0.4)
+                      : colorScheme.borderColor.withValues(alpha: 0.08),
+                  spreadRadius: isSelected ? 2 : 2,
+                  blurRadius: isSelected ? 12 : 8,
+                  offset: isSelected ? Offset.zero : const Offset(0, 2),
+                ),
+              ],
             ),
-          ],
-        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
           child: Row(
@@ -848,8 +899,16 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                 width: 45,
                 height: 45,
                 decoration: BoxDecoration(
-                  color: colorScheme.secondaryCardBackground,
+                  color: LayoutStyleNotifier.instance.isLiquidGlass
+                      ? Colors.transparent
+                      : colorScheme.secondaryCardBackground,
                   shape: BoxShape.circle,
+                  border: LayoutStyleNotifier.instance.isLiquidGlass
+                      ? Border.all(
+                          color: colorScheme.accentBlue.withValues(alpha: 0.5),
+                          width: 1.5,
+                        )
+                      : null,
                 ),
                 child: Center(
                   child: Text(
@@ -935,26 +994,46 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
             : Colors.green[800]!;
         title = "學期統計 (試算)";
         icon = Icons.calculate_outlined;
-        showRank = false;
+        showRank = true;
         break;
     }
 
-    return Container(
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+
+    // Apply transparency to the background colors in liquid glass mode while retaining the original hues
+    List<Color> cardBgColors = bgColors;
+    if (isLiquidGlass) {
+      cardBgColors = colorScheme.isDark
+          ? bgColors.map((c) => c.withValues(alpha: 0.12)).toList()
+          : bgColors.map((c) => c.withValues(alpha: 0.40)).toList();
+    }
+
+    final mainContent = Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: bgColors,
+          colors: cardBgColors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: themeColor.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: isLiquidGlass
+            ? Border.all(
+                color: colorScheme.isDark
+                    ? themeColor.withValues(alpha: 0.25)
+                    : themeColor.withValues(alpha: 0.35),
+                width: 1.2,
+              )
+            : null,
+        boxShadow: isLiquidGlass
+            ? null // Shadow is handled by the outer container in liquid glass mode
+            : [
+                BoxShadow(
+                  color: themeColor.withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -977,28 +1056,29 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                   const Spacer(),
                   GestureDetector(
                     onTap: () {
-                      showDialog(
+                      showGlassDialog(
                         context: context,
-                        builder: (c) => AlertDialog(
-                          title: const Text("預覽資料說明"),
-                          content: const Text(
-                            "此名次資料是從學校其他系統中抓取的資料，並非最終結果。\n\n"
-                            "• 學分/平均：由程式依據下方課程成績自動試算。\n"
-                            "• 名次與人數：抓取來源非學校成績查訊系統。\n\n"
-                            "請注意：這不是教務處正式成績單，僅供參考，準確資料請以開學後學校正式公告為準。",
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(c),
-                              child: const Text("了解"),
-                            ),
-                          ],
+                        title: const Text("預覽資料說明"),
+                        content: const Text(
+                          "此名次資料是從學校其他系統中抓取的資料，並非最終結果。\n\n"
+                          "• 學分/平均：由程式依據下方課程成績自動試算。\n"
+                          "• 名次與人數：抓取來源非學校成績查訊系統。\n\n"
+                          "請注意：這不是教務處正式成績單，僅供參考，準確資料請以開學後學校正式公告為準。",
                         ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).pop(),
+                            child: const Text("了解"),
+                          ),
+                        ],
                       );
                     },
                     child: Icon(
                       Icons.info_outline_rounded,
-                      color: themeColor.withOpacity(0.7),
+                      color: themeColor.withValues(alpha: 0.7),
                       size: 18,
                     ),
                   ),
@@ -1006,7 +1086,7 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
               ],
             ),
           ),
-          Divider(color: themeColor.withOpacity(0.2), height: 16),
+          Divider(color: themeColor.withValues(alpha: 0.25), height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1027,8 +1107,8 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               decoration: BoxDecoration(
                 color: colorScheme.isDark
-                    ? Colors.black.withOpacity(0.3)
-                    : Colors.white.withOpacity(0.5),
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.white.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -1057,7 +1137,7 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
                       Text(
                         " / ${summary.classSize}",
                         style: TextStyle(
-                          color: themeColor.withOpacity(0.7),
+                          color: themeColor.withValues(alpha: 0.7),
                           fontSize: 12,
                         ),
                       ),
@@ -1070,6 +1150,30 @@ class _ScoreResultPageState extends State<ScoreResultPage> {
         ],
       ),
     );
+
+    if (isLiquidGlass) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: themeColor.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: mainContent,
+          ),
+        ),
+      );
+    }
+
+    return mainContent;
   }
 
   Widget _buildSummaryItem(

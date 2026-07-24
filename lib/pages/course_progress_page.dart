@@ -1,17 +1,22 @@
 import 'dart:convert';
 import 'dart:isolate';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../models/program_model.dart';
 import '../services/ai_personalization_service.dart';
 import '../services/department_service.dart';
 import '../services/eligibility_checker.dart';
+import '../services/offline_error_handler.dart';
+import '../services/offline_mode_service.dart';
 import '../services/program_application_service.dart';
 import '../services/program_link_service.dart';
 import '../services/historical_score_service.dart';
 import '../services/program_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_page_scaffold.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_dialog.dart';
 import '../widgets/course_progress_left_panel.dart';
 import '../widgets/course_progress_profile_bar.dart';
 import '../widgets/course_progress_right_panel.dart';
@@ -48,6 +53,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
   bool _isComputingAll = false;
   bool _hasComputedAll = false;
   bool _isLoading = true;
+  bool _isProfileExpanded = false;
   String? _loadError;
 
   // Waivers
@@ -100,6 +106,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
   }
 
   Future<void> _loadData() async {
+    try {
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -121,6 +128,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
           _selectedDept = savedDept ?? '';
           _doubleMajor = savedDoubleMajor ?? '';
           _minor = savedMinor ?? '';
+          _isProfileExpanded = _selectedDept.isEmpty;
         });
       }
     } catch (e) {
@@ -137,10 +145,13 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
       ProgramApplicationService.instance.loadFromCache(),
     ]);
 
-    // 如果修課資料快取為空，或者與歷年成績快取有落差，則自動執行同步
-    final bool needsSync = await _courseService.checkIfSyncNeeded();
-    if (_courseService.resultsNotifier.value.isEmpty || needsSync) {
-      _courseService.fetchCourseHistory();
+    // 離線模式：跳過 network fetch，只用快取
+    if (!OfflineModeService.instance.isOffline) {
+      // 如果修課資料快取為空，或者與歷年成績快取有落差，則自動執行同步
+      final bool needsSync = await _courseService.checkIfSyncNeeded();
+      if (_courseService.resultsNotifier.value.isEmpty || needsSync) {
+        _courseService.fetchCourseHistory();
+      }
     }
 
     await _loadFavorites();
@@ -160,16 +171,18 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
       if (mounted) setState(() => _isLoading = false);
     }
 
-    // 從網路取得最新資料（如果快取是空的）
-    try {
-      if (!hasCachedPrograms) {
-        await _programService.fetchPrograms();
+    // 從網路取得最新資料（進入頁面且記憶體無資料時自動下載）
+    if (!OfflineModeService.instance.isOffline) {
+      try {
+        if (!hasCachedPrograms) {
+          await _programService.fetchPrograms();
+        }
+        if (!hasCachedDepts) {
+          await _deptService.fetchDepartments();
+        }
+      } catch (e) {
+        debugPrint('Network fetch error: $e');
       }
-      if (!hasCachedDepts) {
-        await _deptService.fetchDepartments();
-      }
-    } catch (e) {
-      debugPrint('Network fetch error: $e');
     }
 
     if (!mounted) return;
@@ -179,7 +192,9 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
         _deptService.departmentsNotifier.value.isEmpty) {
       setState(() {
         _isLoading = false;
-        _loadError = '無法載入資料，請檢查網路連線後重試';
+        _loadError = OfflineModeService.instance.isOffline
+            ? '離線模式不可用，請連接網路並重啟 App 以使用此功能'
+            : '無法載入資料，請檢查網路連線後重試';
       });
       return;
     }
@@ -188,6 +203,12 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
       setState(() {
         _isLoading = false;
         _loadError = null;
+      });
+      // 每次進入頁面載入完成後，自動跳出「關於學程進度」提示視窗
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showInfoDialog(Theme.of(context).colorScheme);
+        }
       });
     }
 
@@ -237,6 +258,18 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
 
     if (mounted && _selectedDept.isNotEmpty && _coursesTaken.isNotEmpty) {
       await _computeAllPrograms();
+    }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (e is OfflineDisabledException) {
+          await OfflineErrorHandler.show(context, e);
+        } else {
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
     }
   }
 
@@ -493,17 +526,19 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
     required List<String> minorDepts,
     required Map<String, VerificationStatus>? verificationStatuses,
   }) {
-    return Isolate.run(() => EligibilityChecker.checkEligibility(
-      program,
-      year,
-      semester,
-      studentDept,
-      coursesTaken,
-      waivers,
-      doubleMajorDepts,
-      minorDepts,
-      verificationStatuses,
-    ));
+    return Isolate.run(
+      () => EligibilityChecker.checkEligibility(
+        program,
+        year,
+        semester,
+        studentDept,
+        coursesTaken,
+        waivers,
+        doubleMajorDepts,
+        minorDepts,
+        verificationStatuses,
+      ),
+    );
   }
 
   List<String> get _minorDepts => _minor.isEmpty
@@ -583,7 +618,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
     if (_selectedDept.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('請先填寫你的科系並儲存')));
+      ).showSnackBar(const SnackBar(content: Text('請先填寫你的科系並儲存'), duration: const Duration(seconds: 2)));
       return;
     }
 
@@ -689,20 +724,17 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                                 setState(() => _currentTab = tab),
                             isComputingAll: _isComputingAll,
                             isLoading: _isLoading,
-                            isCourseDataLoading: _courseService
-                                .isLoadingNotifier
-                                .value,
+                            isCourseDataLoading:
+                                _courseService.isLoadingNotifier.value,
                             selectedDept: _selectedDept,
                             programs: programs,
                             departments: departments,
                             allProgramResults: _allProgramResults,
-                            selectedProgramId:
-                                _selectedProgram?.programId,
+                            selectedProgramId: _selectedProgram?.programId,
                             onProgramSelected: _checkProgram,
                             isDisabled: isDisabled,
                             favoritePrograms: _favoritePrograms,
-                            verificationStatuses:
-                                _verificationStatuses,
+                            verificationStatuses: _verificationStatuses,
                             onRemoveFavorite: _removeFavorite,
                             shrinkWrap: false,
                           ),
@@ -716,10 +748,8 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                             onFavoriteToggle: _toggleFavorite,
                             waivers: _waivers,
                             onWaiverChanged: _updateWaiver,
-                            verificationStatuses:
-                                _verificationStatuses,
-                            onVerificationChanged:
-                                _updateVerificationStatus,
+                            verificationStatuses: _verificationStatuses,
+                            onVerificationChanged: _updateVerificationStatus,
                             pdfLink: _pdfLink,
                           ),
                         ),
@@ -727,8 +757,7 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                     )
                   : CourseProgressLeftPanel(
                       currentTab: _currentTab,
-                      onTabChanged: (tab) =>
-                          setState(() => _currentTab = tab),
+                      onTabChanged: (tab) => setState(() => _currentTab = tab),
                       isComputingAll: _isComputingAll,
                       isLoading: _isLoading,
                       isCourseDataLoading:
@@ -748,43 +777,79 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
             ),
           );
 
+    final showProfileAndCoursesRow = isWideScreen && !_isProfileExpanded;
+
     final bodyChildren = [
-      CourseProgressProfileBar(
-        departments: departments,
-        savedDept: _selectedDept,
-        savedDoubleMajor: _doubleMajor,
-        savedMinor: _minor,
-        isDirty: _isDirty,
-        onFieldChanged: _markDirty,
-        onSave: _saveProfile,
-      ),
-      const SizedBox(height: 12),
-      _buildPassedCoursesTile(colorScheme),
+      if (showProfileAndCoursesRow)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: CourseProgressProfileBar(
+                departments: departments,
+                savedDept: _selectedDept,
+                savedDoubleMajor: _doubleMajor,
+                savedMinor: _minor,
+                isDirty: _isDirty,
+                onFieldChanged: _markDirty,
+                onSave: _saveProfile,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    _isProfileExpanded = expanded;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: _buildPassedCoursesTile(colorScheme)),
+          ],
+        )
+      else ...[
+        CourseProgressProfileBar(
+          departments: departments,
+          savedDept: _selectedDept,
+          savedDoubleMajor: _doubleMajor,
+          savedMinor: _minor,
+          isDirty: _isDirty,
+          onFieldChanged: _markDirty,
+          onSave: _saveProfile,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _isProfileExpanded = expanded;
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildPassedCoursesTile(colorScheme),
+      ],
       const SizedBox(height: 12),
       isWideScreen ? Expanded(child: mainContent) : mainContent,
+      if (!isWideScreen && LayoutStyleNotifier.instance.isLiquidGlass)
+        const SizedBox(height: 100),
     ];
 
-    return Scaffold(
+    return GlassPageScaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('學程進度'),
-        actions: [_buildInfoButton(colorScheme), const SizedBox(width: 12)],
+        actions: [
+          _buildInfoButton(colorScheme),
+          const SizedBox(width: 12),
+        ],
       ),
-      backgroundColor: colorScheme.pageBackground,
       body: isWideScreen
           ? Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
-                children: bodyChildren,
-              ),
+              child: Column(children: bodyChildren),
             )
           : SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Column(
-                  children: bodyChildren,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
                 ),
+                child: Column(children: bodyChildren),
               ),
             ),
     );
@@ -799,11 +864,13 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
           onTap: _showPassedCoursesBottomSheet,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.cardBackground,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colorScheme.borderColor),
-            ),
+            decoration:
+                glassCardDecoration(context, borderRadius: 12) ??
+                BoxDecoration(
+                  color: colorScheme.cardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.borderColor),
+                ),
             child: Row(
               children: [
                 Icon(
@@ -854,10 +921,27 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
       builder: (context) {
         return Container(
           height: MediaQuery.of(context).size.height * 0.85,
-          decoration: BoxDecoration(
-            color: colorScheme.cardBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
+          decoration: LayoutStyleNotifier.instance.isLiquidGlass
+              ? BoxDecoration(
+                  color: colorScheme.isDark
+                      ? Colors.black.withValues(alpha: 0.92)
+                      : Colors.white.withValues(alpha: 0.92),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  border: Border.all(
+                    color: colorScheme.isDark
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Colors.black.withValues(alpha: 0.12),
+                    width: 1.0,
+                  ),
+                )
+              : BoxDecoration(
+                  color: colorScheme.cardBackground,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                ),
           child: Column(
             children: [
               // Handle bar
@@ -1040,7 +1124,11 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                           ..sort((a, b) => b.compareTo(a));
 
                         return ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 24),
+                          padding: EdgeInsets.only(
+                            bottom: LayoutStyleNotifier.instance.isLiquidGlass
+                                ? 100
+                                : 24,
+                          ),
                           itemCount: sortedSemesters.length,
                           itemBuilder: (context, index) {
                             final sem = sortedSemesters[index];
@@ -1051,7 +1139,12 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
                                 // Semester Header
                                 Container(
                                   width: double.infinity,
-                                  color: colorScheme.secondaryCardBackground,
+                                  color:
+                                      LayoutStyleNotifier.instance.isLiquidGlass
+                                      ? (colorScheme.isDark
+                                            ? Colors.white.withValues(alpha: 0.08)
+                                            : Colors.black.withValues(alpha: 0.04))
+                                      : colorScheme.secondaryCardBackground,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 20,
                                     vertical: 8,
@@ -1174,18 +1267,20 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: colorScheme.cardBackground,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colorScheme.borderColor, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
+          decoration:
+              glassCardDecoration(context, borderRadius: 20) ??
+              BoxDecoration(
+                color: colorScheme.cardBackground,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: colorScheme.borderColor, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ],
-          ),
           child: ValueListenableBuilder<bool>(
             valueListenable: _courseService.isLoadingNotifier,
             builder: (context, isLoading, _) {
@@ -1300,6 +1395,9 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
   }
 
   Future<void> _startManualSync() async {
+    // 離線模式：跳對話框，不觸發任何 fetch
+    if (await OfflineErrorHandler.handleRefresh(context)) return;
+
     try {
       // 先執行完整更新，重新下載歷年所有學期成績
       await HistoricalScoreService.instance.fetchAllData(
@@ -1314,7 +1412,12 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
         _loadData();
       }
     } catch (e) {
-      _showErrorSnackBar("同步發生異常，請確認連線或稍後再試！");
+      if (e is OfflineDisabledException) {
+        // 防禦：gate 已擋住，但若有人改動仍接住
+        if (mounted) await OfflineErrorHandler.show(context, e);
+      } else {
+        _showErrorSnackBar("同步發生異常，請確認連線或稍後再試！");
+      }
     }
   }
 
@@ -1402,20 +1505,41 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
   // Loading state
   // ─────────────────────────────────────────────
   Widget _buildSkeletonLoading(ColorScheme colorScheme) {
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: colorScheme.accentBlue),
+        const SizedBox(height: 16),
+        Text(
+          '載入中…',
+          style: TextStyle(fontSize: 15, color: colorScheme.subtitleText),
+        ),
+      ],
+    );
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(color: colorScheme.accentBlue),
-          const SizedBox(height: 16),
-          Text(
-            '載入中…',
-            style: TextStyle(fontSize: 15, color: colorScheme.subtitleText),
-          ),
-        ],
-      ),
+      child: isLiquidGlass
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              decoration: BoxDecoration(
+                color: colorScheme.isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.isDark
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.black.withValues(alpha: 0.05),
+                  width: 0.5,
+                ),
+              ),
+              child: content,
+            )
+          : content,
     );
   }
+
+
 
   // ─────────────────────────────────────────────
   // Info button + disclaimer dialog
@@ -1439,6 +1563,78 @@ class _CourseProgressPageState extends State<CourseProgressPage> {
   }
 
   void _showInfoDialog(ColorScheme colorScheme) {
+    if (LayoutStyleNotifier.instance.isLiquidGlass) {
+      showGlassDialog(
+        context: context,
+        title: const Text(
+          '關於學程進度',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Builder(
+          builder: (context) {
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildInfoRow(
+                    colorScheme: colorScheme,
+                    accentColor: Colors.orange.shade400,
+                    title: 'AI 數據轉換',
+                    body: '學程規則由 AI 自動解析，數據可能存在誤差，請務必以官方公告為準。',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildInfoRow(
+                    colorScheme: colorScheme,
+                    accentColor: Colors.teal.shade400,
+                    title: '跨院課程確認',
+                    body: '部分課程認定較為複雜，系統無法自動涵蓋所有情況，建議與系辦再次確認。',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildInfoRow(
+                    colorScheme: colorScheme,
+                    accentColor: colorScheme.accentBlue,
+                    title: '完成度參考',
+                    body: '進度百分比為系統估算值，僅供選課參考，不代表最終審核結果。',
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colorScheme.isDark
+                          ? Colors.orange[900]!.withValues(alpha: 0.2)
+                          : Colors.orange[50]!,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      '⚠️ 提醒：因資訊落差導致的任何問題，本系統不負擔相關責任。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.isDark
+                            ? Colors.orange[200]
+                            : Colors.orange[800],
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+            child: const Text('我知道了'),
+          ),
+        ],
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1680,7 +1876,7 @@ class _CourseProgressDetailPageState extends State<CourseProgressDetailPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return GlassPageScaffold(
       appBar: AppBar(
         title: Text(widget.program?.programName ?? '學程進度'),
         actions: [

@@ -78,27 +78,19 @@ bool matchCourseCodeFuzzy(String apiId, String schoolCode) {
 
 Map<String, String> splitCourseName(String fullName) {
   final cleanName = fullName.split('\n')[0];
-  final RegExp englishRegex = RegExp(r'[A-Za-z].*');
-  final match = englishRegex.firstMatch(cleanName);
-
-  if (match != null) {
-    final startIndex = match.start;
-    final chinesePart = cleanName.substring(0, startIndex).trim();
-    final englishPart = cleanName.substring(startIndex).trim();
-    return {
-      "chinese": chinesePart.isEmpty ? englishPart : chinesePart,
-      "english": chinesePart.isEmpty ? "" : englishPart,
-    };
+  final String chinesePart = keepUntilLastChinese(cleanName).trim();
+  if (chinesePart.isEmpty) {
+    return {"chinese": cleanName, "english": ""};
   }
-
-  return {"chinese": cleanName, "english": ""};
+  final String englishPart = cleanName.substring(chinesePart.length).trim();
+  return {"chinese": chinesePart, "english": englishPart};
 }
 
 /// 保留到最後一個中文字（含其後配對的括號）
 String keepUntilLastChinese(String input) {
   final RegExp chineseRegex = RegExp(r'[一-龥]');
   final Iterable<Match> matches = chineseRegex.allMatches(input);
-  if (matches.isEmpty) return "";
+  if (matches.isEmpty) return input.split('\n')[0];
   int lastIndex = matches.last.end;
   String prefix = input.substring(0, lastIndex);
 

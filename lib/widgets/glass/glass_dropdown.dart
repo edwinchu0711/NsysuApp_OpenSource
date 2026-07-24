@@ -1,5 +1,28 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/layout_style_notifier.dart';
+import 'glass_decoration.dart';
+
+/// 當前是否為 liquid glass 模式（下拉選單 overlay 建立時讀取一次）。
+bool get _isLiquidGlass => LayoutStyleNotifier.instance.isLiquidGlass;
+
+/// liquid glass 模式下，下拉觸發鈕的半透明玻璃外觀。
+BoxDecoration _glassTriggerDecoration(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return BoxDecoration(
+    color: isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.4),
+    borderRadius: BorderRadius.circular(10),
+    border: Border.all(
+      // 淺色模式改用極淺黑邊界，避免白邊壓在白底上完全看不見。
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.12)
+          : Colors.black.withValues(alpha: 0.08),
+      width: 1.0,
+    ),
+  );
+}
 
 /// A modern "Liquid Glass" style single-select dropdown.
 class GlassSingleSelectDropdown extends StatefulWidget {
@@ -129,50 +152,69 @@ class _GlassSingleSelectDropdownState extends State<GlassSingleSelectDropdown> {
                       ),
                     );
                   },
-                  child: Container(
-                    width: size.width < widget.minWidth
-                        ? widget.minWidth
-                        : size.width,
-                    constraints: const BoxConstraints(maxHeight: 350),
-                    decoration: BoxDecoration(
-                      color: colorScheme.headerBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorScheme.borderColor.withValues(alpha: 0.5),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                  child: Builder(
+                    builder: (context) {
+                      final menuContent = SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.items.map((item) {
+                            final isSelected = item == widget.value;
+                            final label = widget.displayMap != null
+                                ? (widget.displayMap![item] ?? item)
+                                : item;
+                            return HoverableSingleSelectOption(
+                              label: label,
+                              isSelected: isSelected,
+                              colorScheme: colorScheme,
+                              dense: widget.dense,
+                              fireOnPress: _isLiquidGlass,
+                              onTap: () {
+                                if (widget.onChanged != null) {
+                                  widget.onChanged!(item);
+                                }
+                                _closeDropdown();
+                              },
+                            );
+                          }).toList(),
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: widget.items.map((item) {
-                          final isSelected = item == widget.value;
-                          final label = widget.displayMap != null
-                              ? (widget.displayMap![item] ?? item)
-                              : item;
-                          return HoverableSingleSelectOption(
-                            label: label,
-                            isSelected: isSelected,
-                            colorScheme: colorScheme,
-                            dense: widget.dense,
-                            onTap: () {
-                              if (widget.onChanged != null) {
-                                widget.onChanged!(item);
-                              }
-                              _closeDropdown();
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                      );
+                      if (_isLiquidGlass) {
+                        return Container(
+                          width: size.width < widget.minWidth
+                              ? widget.minWidth
+                              : size.width,
+                          constraints: const BoxConstraints(maxHeight: 350),
+                          decoration: glassMenuDecoration(context),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: menuContent,
+                        );
+                      }
+                      return Container(
+                        width: size.width < widget.minWidth
+                            ? widget.minWidth
+                            : size.width,
+                        constraints: const BoxConstraints(maxHeight: 350),
+                        decoration: BoxDecoration(
+                          color: colorScheme.headerBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.borderColor.withValues(
+                              alpha: 0.5,
+                            ),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: menuContent,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -222,11 +264,16 @@ class _GlassSingleSelectDropdownState extends State<GlassSingleSelectDropdown> {
               padding: EdgeInsets.symmetric(
                 horizontal: widget.horizontalPadding,
               ),
-              decoration: BoxDecoration(
-                color: colorScheme.secondaryCardBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colorScheme.borderColor, width: 0.5),
-              ),
+              decoration: _isLiquidGlass
+                  ? _glassTriggerDecoration(context)
+                  : BoxDecoration(
+                      color: colorScheme.secondaryCardBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: colorScheme.borderColor,
+                        width: 0.5,
+                      ),
+                    ),
               child: Row(
                 mainAxisSize: (widget.width != null || widget.isExpanded)
                     ? MainAxisSize.max
@@ -271,6 +318,9 @@ class HoverableSingleSelectOption extends StatefulWidget {
   final ColorScheme colorScheme;
   final bool dense;
 
+  /// liquid glass 模式時為 true：在按下（tap-down）時立即觸發，不必等放開。
+  final bool fireOnPress;
+
   const HoverableSingleSelectOption({
     Key? key,
     required this.label,
@@ -278,6 +328,7 @@ class HoverableSingleSelectOption extends StatefulWidget {
     required this.onTap,
     required this.colorScheme,
     this.dense = false,
+    this.fireOnPress = false,
   }) : super(key: key);
 
   @override
@@ -299,7 +350,9 @@ class _HoverableSingleSelectOptionState
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.fireOnPress ? null : widget.onTap,
+        onTapDown: widget.fireOnPress ? (_) => widget.onTap() : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
@@ -534,54 +587,73 @@ class _GlassMultiSelectDropdownState extends State<GlassMultiSelectDropdown> {
                       ),
                     );
                   },
-                  child: Container(
-                    width: size.width < widget.minWidth
-                        ? widget.minWidth
-                        : size.width,
-                    constraints: const BoxConstraints(maxHeight: 300),
-                    decoration: BoxDecoration(
-                      color: colorScheme.headerBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorScheme.borderColor.withValues(alpha: 0.5),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                  child: Builder(
+                    builder: (context) {
+                      final menuContent = SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.items.map((item) {
+                            final isSelected = _currentSelected.contains(item);
+                            final label = _getDisplayLabel(item);
+                            return HoverableMultiSelectOption(
+                              label: label,
+                              isSelected: isSelected,
+                              colorScheme: colorScheme,
+                              dense: widget.dense,
+                              fireOnPress: _isLiquidGlass,
+                              onTap: () {
+                                if (isSelected) {
+                                  _currentSelected.remove(item);
+                                } else {
+                                  _currentSelected.add(item);
+                                }
+                                widget.onChanged?.call(
+                                  Set<String>.from(_currentSelected),
+                                );
+                                _overlayEntry?.markNeedsBuild();
+                                setState(() {});
+                              },
+                            );
+                          }).toList(),
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: widget.items.map((item) {
-                          final isSelected = _currentSelected.contains(item);
-                          final label = _getDisplayLabel(item);
-                          return HoverableMultiSelectOption(
-                            label: label,
-                            isSelected: isSelected,
-                            colorScheme: colorScheme,
-                            dense: widget.dense,
-                            onTap: () {
-                              if (isSelected) {
-                                _currentSelected.remove(item);
-                              } else {
-                                _currentSelected.add(item);
-                              }
-                              widget.onChanged?.call(
-                                Set<String>.from(_currentSelected),
-                              );
-                              _overlayEntry?.markNeedsBuild();
-                              setState(() {});
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                      );
+                      if (_isLiquidGlass) {
+                        return Container(
+                          width: size.width < widget.minWidth
+                              ? widget.minWidth
+                              : size.width,
+                          constraints: const BoxConstraints(maxHeight: 300),
+                          decoration: glassMenuDecoration(context),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: menuContent,
+                        );
+                      }
+                      return Container(
+                        width: size.width < widget.minWidth
+                            ? widget.minWidth
+                            : size.width,
+                        constraints: const BoxConstraints(maxHeight: 300),
+                        decoration: BoxDecoration(
+                          color: colorScheme.headerBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.borderColor.withValues(
+                              alpha: 0.5,
+                            ),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: menuContent,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -634,11 +706,16 @@ class _GlassMultiSelectDropdownState extends State<GlassMultiSelectDropdown> {
               padding: EdgeInsets.symmetric(
                 horizontal: widget.horizontalPadding,
               ),
-              decoration: BoxDecoration(
-                color: colorScheme.secondaryCardBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colorScheme.borderColor, width: 0.5),
-              ),
+              decoration: _isLiquidGlass
+                  ? _glassTriggerDecoration(context)
+                  : BoxDecoration(
+                      color: colorScheme.secondaryCardBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: colorScheme.borderColor,
+                        width: 0.5,
+                      ),
+                    ),
               child: Row(
                 mainAxisSize: (widget.width != null || widget.isExpanded)
                     ? MainAxisSize.max
@@ -683,6 +760,9 @@ class HoverableMultiSelectOption extends StatefulWidget {
   final ColorScheme colorScheme;
   final bool dense;
 
+  /// liquid glass 模式時為 true：在按下（tap-down）時立即觸發，不必等放開。
+  final bool fireOnPress;
+
   const HoverableMultiSelectOption({
     Key? key,
     required this.label,
@@ -690,6 +770,7 @@ class HoverableMultiSelectOption extends StatefulWidget {
     required this.onTap,
     required this.colorScheme,
     this.dense = false,
+    this.fireOnPress = false,
   }) : super(key: key);
 
   @override
@@ -711,7 +792,9 @@ class _HoverableMultiSelectOptionState
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
-        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.fireOnPress ? null : widget.onTap,
+        onTapDown: widget.fireOnPress ? (_) => widget.onTap() : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,

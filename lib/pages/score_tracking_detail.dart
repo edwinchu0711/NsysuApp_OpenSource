@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../models/score_item.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_dropdown.dart';
+import '../theme/layout_style_notifier.dart';
+import '../widgets/glass/glass_card.dart';
+import '../widgets/glass/glass_dropdown.dart';
+import '../services/offline_error_handler.dart';
 
 class ScoreTrackingDetail extends StatefulWidget {
   final CourseScoreData courseData;
@@ -275,7 +278,7 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("權重總和必須為 100%，目前為 ${totalWeight.toStringAsFixed(2)}%"),
-        ),
+          duration: const Duration(seconds: 2),),
       );
       return;
     }
@@ -294,6 +297,7 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
   }
 
   Future<void> _handleRefresh() async {
+    if (await OfflineErrorHandler.handleRefresh(context)) return;
     await widget.onRefresh();
     if (mounted) {
       setState(() {
@@ -454,6 +458,7 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
 
   Widget _buildScoreItemRow(ScoreItem item, {int level = 0}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
     final controllerKey = '${_courseData.courseId}_${item.id}';
     final controller = _getController(
       controllerKey,
@@ -511,11 +516,23 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colorScheme.borderColor),
+                        borderSide: BorderSide(
+                          color: isLiquidGlass
+                              ? (colorScheme.isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Colors.white.withValues(alpha: 0.3))
+                              : colorScheme.borderColor,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colorScheme.borderColor),
+                        borderSide: BorderSide(
+                          color: isLiquidGlass
+                              ? (colorScheme.isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Colors.white.withValues(alpha: 0.3))
+                              : colorScheme.borderColor,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -525,7 +542,11 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
                         ),
                       ),
                       filled: true,
-                      fillColor: colorScheme.cardBackground,
+                      fillColor: isLiquidGlass
+                          ? (colorScheme.isDark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.white.withValues(alpha: 0.3))
+                          : colorScheme.cardBackground,
                       isDense: true,
                     ),
                     inputFormatters: [
@@ -621,15 +642,18 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
   ) {
     final item = list[index];
     final colorScheme = Theme.of(context).colorScheme;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     return Padding(
       padding: EdgeInsets.only(bottom: 8, left: level * 20.0),
       child: Container(
-        decoration: BoxDecoration(
-          color: colorScheme.secondaryCardBackground.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colorScheme.borderColor, width: 0.8),
-        ),
+        decoration: isLiquidGlass
+            ? glassCardDecoration(context, borderRadius: 10)
+            : BoxDecoration(
+                color: colorScheme.secondaryCardBackground.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colorScheme.borderColor, width: 0.8),
+              ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,7 +690,11 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: colorScheme.cardBackground,
+                      fillColor: isLiquidGlass
+                          ? (colorScheme.isDark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.white.withValues(alpha: 0.3))
+                          : colorScheme.cardBackground,
                     ),
                   ),
                 ),
@@ -709,7 +737,11 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: colorScheme.cardBackground,
+                      fillColor: isLiquidGlass
+                          ? (colorScheme.isDark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.white.withValues(alpha: 0.3))
+                          : colorScheme.cardBackground,
                     ),
                   ),
                 ),
@@ -807,6 +839,7 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
     final currentTotal = _courseData.currentTotal;
     final enteredWeight = _courseData.enteredWeight;
     final remainingWeight = 100 - enteredWeight;
+    final isLiquidGlass = LayoutStyleNotifier.instance.isLiquidGlass;
 
     double? targetMinScore;
     if (_courseData.targetGrade != null) {
@@ -816,11 +849,13 @@ class _ScoreTrackingDetailState extends State<ScoreTrackingDetail> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.borderColor),
-      ),
+      decoration: isLiquidGlass
+          ? glassCardDecoration(context, borderRadius: 8)
+          : BoxDecoration(
+              color: colorScheme.cardBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colorScheme.borderColor),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
