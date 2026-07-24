@@ -28,6 +28,11 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Decode Android Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/NSYSU_APK_KEY.jks
+          echo "${{ secrets.KEY_PROPERTIES }}" > android/key.properties
+
       - name: Get Version from pubspec.yaml
         id: get_version
         run: |
