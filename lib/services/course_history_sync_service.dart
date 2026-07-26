@@ -201,6 +201,9 @@ class CourseHistorySyncService {
 
       List<CourseHistoryResult> allResults = [];
 
+      final credentials = await StorageService.instance.getCredentials();
+      String studentId = (credentials['username'] ?? '').trim();
+
       // 若所有課程均已在快取中擁有開課科系對照，免去網路登入選課系統，直接極速解析
       if (semestersNeedingNetwork.isEmpty) {
         for (var originalKey in decoded.keys) {
@@ -220,7 +223,7 @@ class CourseHistorySyncService {
                     courseName: courseJson['name'] ?? '',
                     credits: credits,
                     score: score,
-                    passed: _isPassed(score),
+                    passed: _isPassed(score, studentId),
                   ),
                 );
               }
@@ -234,8 +237,6 @@ class CourseHistorySyncService {
         return;
       }
 
-      final credentials = await StorageService.instance.getCredentials();
-      String studentId = (credentials['username'] ?? '').trim();
       String password = (credentials['password'] ?? '').trim();
       if (studentId.isEmpty || password.isEmpty) {
         statusMessageNotifier.value = "找不到帳號密碼";
@@ -295,7 +296,7 @@ class CourseHistorySyncService {
                       courseName: courseJson['name'] ?? '',
                       credits: credits,
                       score: score,
-                      passed: _isPassed(score),
+                      passed: _isPassed(score, studentId),
                     ),
                   );
                   break;
@@ -446,11 +447,34 @@ class CourseHistorySyncService {
     return results;
   }
 
-  bool _isPassed(String score) {
-    String s = score.toUpperCase();
-    return s.contains('A') ||
-        s.contains('B') ||
-        s.contains('C') ||
-        s.contains('P');
+  bool _isPassed(String score, [String? studentId]) {
+    String s = score.trim().toUpperCase();
+    if (s.isEmpty) return false;
+
+    bool isGraduate = studentId != null &&
+        studentId.toUpperCase().startsWith(RegExp(r'^[MNDP]'));
+    double passThreshold = isGraduate ? 70.0 : 60.0;
+
+    double? numScore = double.tryParse(s);
+    if (numScore != null) {
+      return numScore >= passThreshold;
+    }
+
+    if (isGraduate) {
+      return s != 'C+' &&
+          s != 'C' &&
+          s != 'C-' &&
+          s != 'D' &&
+          s != 'E' &&
+          s != 'F' &&
+          s != 'X' &&
+          s != '(F)';
+    } else {
+      return s != 'D' &&
+          s != 'E' &&
+          s != 'F' &&
+          s != 'X' &&
+          s != '(F)';
+    }
   }
 }

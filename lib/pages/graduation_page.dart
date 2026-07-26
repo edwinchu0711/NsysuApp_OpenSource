@@ -264,7 +264,7 @@ class _GraduationPageState extends State<GraduationPage> {
       "C": 2.0,
       "C-": 1.7,
       "D": 1.0,
-      "E": 0.0,
+      "E": 0.8,
       "F": 0.0,
       "X": 0.0,
     };
@@ -283,8 +283,41 @@ class _GraduationPageState extends State<GraduationPage> {
         if (score.contains("抵免")) continue;
         if (score == "(P)") continue;
 
+        double? gp;
         if (gradePoints.containsKey(score)) {
-          double gp = gradePoints[score]!;
+          gp = gradePoints[score]!;
+        } else {
+          double? numScore = double.tryParse(score);
+          if (numScore != null) {
+            if (numScore >= 90) {
+              gp = 4.3;
+            } else if (numScore >= 85) {
+              gp = 4.0;
+            } else if (numScore >= 80) {
+              gp = 3.7;
+            } else if (numScore >= 77) {
+              gp = 3.3;
+            } else if (numScore >= 73) {
+              gp = 3.0;
+            } else if (numScore >= 70) {
+              gp = 2.7;
+            } else if (numScore >= 67) {
+              gp = 2.3;
+            } else if (numScore >= 63) {
+              gp = 2.0;
+            } else if (numScore >= 60) {
+              gp = 1.7;
+            } else if (numScore >= 50) {
+              gp = 1.0;
+            } else if (numScore >= 40) {
+              gp = 0.8;
+            } else {
+              gp = 0.0;
+            }
+          }
+        }
+
+        if (gp != null) {
           double weighted = credit * gp;
           semWeightedPoints += weighted;
           semGPACredits += credit;
