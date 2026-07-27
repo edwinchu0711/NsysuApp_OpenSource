@@ -31,8 +31,9 @@ class AboutDeveloperPage extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
-          backgroundColor:
-              isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
+          backgroundColor: isLiquidGlass
+              ? Colors.transparent
+              : colorScheme.cardBackground,
           foregroundColor: colorScheme.primaryText,
           elevation: 0,
           iconTheme: IconThemeData(color: colorScheme.primaryText),
@@ -93,8 +94,9 @@ class AboutDeveloperPage extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor:
-            isLiquidGlass ? Colors.transparent : colorScheme.cardBackground,
+        backgroundColor: isLiquidGlass
+            ? Colors.transparent
+            : colorScheme.cardBackground,
         foregroundColor: colorScheme.primaryText,
         elevation: 0,
         iconTheme: IconThemeData(color: colorScheme.primaryText),
@@ -195,8 +197,8 @@ class AboutDeveloperPage extends StatelessWidget {
                       ),
                       child: CircleAvatar(
                         radius: 36,
-                        backgroundColor: colorScheme.accentBlue.withValues(alpha: 
-                          0.12,
+                        backgroundColor: colorScheme.accentBlue.withValues(
+                          alpha: 0.12,
                         ),
                         child: Icon(
                           Icons.code_rounded,
@@ -247,7 +249,9 @@ class AboutDeveloperPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Divider(
-                            color: colorScheme.borderColor.withValues(alpha: 0.5),
+                            color: colorScheme.borderColor.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -347,7 +351,7 @@ class AboutDeveloperPage extends StatelessWidget {
             colorScheme,
             title: "ClearGrad. 畢經之路",
             subtitle:
-                "本專案部分創意靈感源於「© 2026 ClearGrad. 畢經之路」（由 葉峻銓 創作，邱俊博 搭配色彩）。並特別感謝 葉峻銓 為本專案提供寶貴的想法與功能建議。",
+                "本專案部分創意靈感源於「© 2026 ClearGrad. 畢經之路」（由 葉峻銓 創作，邱俊博 負責品牌 Logo 與視覺設計）。並特別感謝 葉峻銓 為本專案提供寶貴的想法與功能建議。",
             icon: Icons.palette_outlined,
           ),
           const Padding(
@@ -559,8 +563,8 @@ class AboutDeveloperPage extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: isLiquidGlass
             ? (isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.white.withValues(alpha: 0.5))
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.white.withValues(alpha: 0.5))
             : colorScheme.accentBlue,
         foregroundColor: isLiquidGlass ? colorScheme.primaryText : Colors.white,
         side: isLiquidGlass
