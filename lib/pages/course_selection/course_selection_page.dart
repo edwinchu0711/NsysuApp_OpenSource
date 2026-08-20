@@ -331,6 +331,44 @@ class _CourseSelectionPageState extends State<CourseSelectionPage>
               style: TextStyle(fontSize: 16, color: colorScheme.primaryText),
             ),
             const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(
+                  alpha: colorScheme.isDark ? 0.2 : 0.08,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "重要提醒：請務必先在「學校選課系統官網」完成「預選課程確認」，才可使用本 App 進行選課操作。",
+                      style: TextStyle(
+                        color: colorScheme.isDark
+                            ? Colors.red[300]
+                            : Colors.red[800],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             const Text(
               "⚠️ 請務必再次確認",
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
