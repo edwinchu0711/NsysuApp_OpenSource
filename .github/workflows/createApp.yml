@@ -7,9 +7,12 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build & Release NSYSU
-    runs-on: macos-latest
+  # ------------------------------------------------------------
+  # Job 1: 打包 Android APK (在 Linux 環境並行跑，快速且省額度)
+  # ------------------------------------------------------------
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +26,6 @@ jobs:
         with:
           flutter-version: '3.44.6'
           channel: 'stable'
-          architecture: x64
           cache: true
 
       - run: flutter pub get
@@ -50,6 +52,38 @@ jobs:
           mv app-arm64-v8a-release.apk NSYSU-${VERSION}-v8a.apk
           mv app-x86_64-release.apk NSYSU-${VERSION}-x64.apk
 
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: build/app/outputs/flutter-apk/NSYSU-*.apk
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # Job 2: 打包 iOS IPA (在 macOS 環境並行跑)
+  # ------------------------------------------------------------
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ✅ 鎖定與本機相同的 Flutter 版本
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+          architecture: x64
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep '^version: ' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+
       - name: Install Pods
         run: pod install --repo-update
         working-directory: ios
@@ -65,11 +99,35 @@ jobs:
           zip -qq -r -9 NSYSU-${VERSION}.ipa Payload
         working-directory: build/ios/iphoneos
 
-      - name: Stage Artifacts
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/ios/iphoneos/NSYSU-*.ipa
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # Job 3: 匯總發布 Release (必須兩者皆成功才會執行)
+  # ------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    needs: [build-android, build-ios]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Version from pubspec.yaml
+        id: get_version
         run: |
-          mkdir -p dist
-          cp build/ios/iphoneos/NSYSU-*.ipa dist/
-          cp build/app/outputs/flutter-apk/NSYSU-*.apk dist/
+          VERSION=$(grep '^version: ' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Upload Binaries to Release
         uses: svenstaro/upload-release-action@v2
