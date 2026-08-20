@@ -1,6 +1,6 @@
 {
-    "name": "test_app",
-    "short_name": "test_app",
+    "name": "NSYSU",
+    "short_name": "NSYSU",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
