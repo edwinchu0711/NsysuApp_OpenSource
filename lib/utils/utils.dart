@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -31,10 +32,18 @@ class Utils {
       return;
     }
     try {
+      String platformName = 'unknown';
+      try {
+        platformName = Platform.operatingSystem;
+      } catch (_) {
+        // 發生例外時保留 'unknown'
+      }
+
       final response = await http
           .post(
             Uri.parse('https://quiet-scene-52f9.jawei-hsu2005.workers.dev'),
-            body: {'platform': defaultTargetPlatform.name}, // 帶入平台資訊
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'platform': platformName}), // 帶入 JSON 平台資訊
           )
           .timeout(const Duration(seconds: 10));
 
@@ -48,3 +57,4 @@ class Utils {
     }
   }
 }
+
